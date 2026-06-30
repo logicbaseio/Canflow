@@ -16,7 +16,7 @@ import {
   type Board,
   type Column,
   type Task,
-} from "@/shared/types";
+} from "../shared/types";
 import { query, one } from "./db";
 
 const app = new Hono().basePath("/api");
