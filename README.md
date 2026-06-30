@@ -60,7 +60,7 @@ Prefer pure-frontend work? `npm run dev` runs Vite alone and proxies `/api` to `
 ## Project layout
 
 ```
-api/[[...route]].ts   Vercel Edge entry → mounts the Hono app
+api/index.ts          Vercel Edge entry → mounts the Hono app (all /api/* via rewrite)
 src/server/app.ts     Hono API (boards, columns, tasks, public, invites)
 src/server/db.ts      Neon Postgres client
 src/shared/types.ts   Shared zod schemas + types
