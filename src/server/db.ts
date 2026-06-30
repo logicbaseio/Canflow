@@ -1,8 +1,10 @@
 import { neon } from '@neondatabase/serverless';
 
-// Neon serverless HTTP client. DATABASE_URL is provided by Vercel env vars
-// (Neon connection string, e.g. postgresql://user:pass@host/db?sslmode=require).
-const connectionString = process.env.DATABASE_URL;
+// Neon serverless HTTP client. Connection string comes from env (Neon URL,
+// e.g. postgresql://user:pass@host/db?sslmode=require). DATABASE_URL is the
+// standard name; CANFLOW_DATABASE_URL is a fallback used to avoid collisions
+// with an unconfigured Vercel/Neon integration that registers an empty DATABASE_URL.
+const connectionString = process.env.DATABASE_URL || process.env.CANFLOW_DATABASE_URL;
 if (!connectionString) {
   // Surface a clear error rather than a cryptic one at first query.
   console.error('DATABASE_URL is not set. Add your Neon connection string to the environment.');
