@@ -1,0 +1,199 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Canflow design system — minimal, Cursor-like.
+  Semantic tokens are CSS variables so light/dark "just work" without dark: variants.
+*/
+:root {
+  /* Surfaces */
+  --app: #f6f6f7;          /* app background */
+  --surface: #ffffff;      /* panels, cards, inputs */
+  --surface-2: #f1f1f2;    /* subtle fills / hover */
+  --surface-3: #eaeaec;    /* pressed / stronger hover */
+  --overlay: rgba(20, 20, 22, 0.28);
+
+  /* Borders */
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+
+  /* Text */
+  --text: #1d1d1f;
+  --text-muted: #6b6b70;
+  --text-subtle: #9a9aa0;
+
+  /* Accents (used sparingly) */
+  --accent: #1d1d1f;            /* primary action = near-black, like Cursor's dark button */
+  --accent-fg: #ffffff;         /* text on accent */
+  --accent-soft: #ececed;       /* selected/active background */
+  --ring: rgba(0, 0, 0, 0.16);  /* focus ring */
+  --blue: #2f6feb;              /* the rare true accent (links, public badge) */
+  --danger: #d23f3f;
+  --success: #2f9e6f;
+  --warning: #c98a1b;
+
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+}
+
+.dark {
+  --app: #161618;
+  --surface: #1e1e21;
+  --surface-2: #26262a;
+  --surface-3: #2f2f34;
+  --overlay: rgba(0, 0, 0, 0.55);
+
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --text: #f3f3f5;
+  --text-muted: #a3a3ab;
+  --text-subtle: #76767e;
+
+  --accent: #f3f3f5;
+  --accent-fg: #161618;
+  --accent-soft: #2c2c31;
+  --ring: rgba(255, 255, 255, 0.22);
+  --blue: #4f8cf0;
+  --danger: #e36464;
+  --success: #4cbd8b;
+  --warning: #e0a93e;
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--app);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+}
+
+/* Thin, unobtrusive scrollbars — Cursor-style */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-subtle);
+  background-clip: content-box;
+}
+
+/* Reusable component primitives */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg text-[13px] font-medium
+      transition-colors duration-150 select-none disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+  .btn-primary:hover {
+    opacity: 0.88;
+  }
+  .btn-ghost {
+    color: var(--text);
+  }
+  .btn-ghost:hover {
+    background: var(--surface-2);
+  }
+  .btn-outline {
+    border: 1px solid var(--border);
+    color: var(--text);
+    background: var(--surface);
+  }
+  .btn-outline:hover {
+    background: var(--surface-2);
+  }
+
+  .field {
+    @apply w-full rounded-lg px-3 py-2 text-[13px] outline-none transition;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .field::placeholder {
+    color: var(--text-subtle);
+  }
+  .field:focus {
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .menu {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px -8px rgba(0, 0, 0, 0.18), 0 2px 6px -2px rgba(0, 0, 0, 0.08);
+  }
+  .menu-item {
+    @apply w-full px-3 py-1.5 text-left text-[13px] flex items-center gap-2 transition-colors;
+    color: var(--text);
+  }
+  .menu-item:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* Motion — keep transitions subtle so view changes don't feel abrupt */
+@keyframes board-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-board-in {
+  animation: board-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-board-in,
+  .animate-fade-in {
+    animation: none;
+  }
+}
