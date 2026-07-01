@@ -28,6 +28,13 @@ function typeLabel(t: string) {
   return 'Kanban';
 }
 
+/** Near-black / default board colors map to the theme accent so the dot stays visible in dark mode. */
+function boardDotColor(color?: string | null) {
+  const c = (color || '').toLowerCase();
+  if (!c || c === '#1d1d1f' || c === '#000000' || c === '#000') return 'var(--accent)';
+  return color!;
+}
+
 export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: BoardSelectorProps) {
   const loading = boards === null;
   const { state, dispatch } = useAppContext();
@@ -199,7 +206,7 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
                   >
                     <span
                       className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: board.color || 'var(--text-subtle)' }}
+                      style={{ backgroundColor: boardDotColor(board.color) }}
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">

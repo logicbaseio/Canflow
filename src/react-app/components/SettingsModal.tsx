@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key } from 'lucide-react';
+import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key, RefreshCw } from 'lucide-react';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 
@@ -102,6 +102,27 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setTokens((t) => t.filter((x) => x.id !== id));
     } catch (e) {
       console.error('Failed to revoke token:', e);
+    }
+  };
+
+  // Legacy tokens (created before key storage) can't be revealed — recreate a fresh, copyable one.
+  const recreateToken = async (old: TokenRow) => {
+    try {
+      const res = await authedFetch('/api/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: old.name || 'Token' }),
+      }).then((r) => r.json());
+      if (res.token) {
+        await authedFetch(`/api/tokens/${old.id}`, { method: 'DELETE' }).catch(() => {});
+        setCreatedToken(res.token);
+        setTokens((t) => [
+          { id: res.id, name: res.name, token_prefix: res.token_prefix, token: res.token, created_at: res.created_at, last_used_at: null },
+          ...t.filter((x) => x.id !== old.id),
+        ]);
+      }
+    } catch (e) {
+      console.error('Failed to recreate token:', e);
     }
   };
 
@@ -316,9 +337,13 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               {t.token_prefix} · {t.last_used_at ? 'used' : 'never used'}
                             </p>
                           </div>
-                          {t.token && (
+                          {t.token ? (
                             <button onClick={() => copy(t.token!, `row-${t.id}`)} className="btn btn-ghost h-8 px-2.5 text-ink-muted gap-1.5 text-[12px]" title="Copy token">
                               {copied === `row-${t.id}` ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy key</>}
+                            </button>
+                          ) : (
+                            <button onClick={() => recreateToken(t)} className="btn btn-ghost h-8 px-2.5 text-ink-muted gap-1.5 text-[12px]" title="This token predates key storage — recreate a copyable one">
+                              <RefreshCw size={14} /> Recreate
                             </button>
                           )}
                           <button onClick={() => revokeToken(t.id)} className="btn btn-ghost h-8 w-8 p-0 text-danger" title="Revoke"><Trash2 size={15} /></button>
