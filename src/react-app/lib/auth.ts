@@ -1,5 +1,5 @@
 import { createInternalNeonAuth } from "@neondatabase/auth";
-import { BetterAuthReactAdapter, useStore } from "@neondatabase/auth/react";
+import { BetterAuthReactAdapter } from "@neondatabase/auth/react";
 
 const url = import.meta.env.VITE_NEON_AUTH_URL as string;
 
@@ -11,12 +11,17 @@ const neon = createInternalNeonAuth(url, { adapter: BetterAuthReactAdapter() });
 export const authClient = neon.adapter;
 export const getJWTToken = neon.getJWTToken;
 
-/** Reactive session hook. `authClient.useSession` is a nanostore atom → read via useStore. */
-export function useSession() {
-  return useStore(authClient.useSession) as {
-    data: { user?: { id: string; name?: string; email?: string } } | null;
-    isPending: boolean;
-  };
+export type SessionState = {
+  data: { user?: { id: string; name?: string; email?: string } } | null;
+  isPending: boolean;
+};
+
+/**
+ * Reactive session hook. The SDK's TS types mislabel `useSession` as a nanostore
+ * atom, but the React adapter exposes it as a hook — so we call it directly.
+ */
+export function useSession(): SessionState {
+  return (authClient.useSession as unknown as () => SessionState)();
 }
 
 /** fetch() that attaches the Neon Auth JWT as a Bearer token when signed in. */
