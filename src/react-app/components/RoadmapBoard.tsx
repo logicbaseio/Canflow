@@ -185,8 +185,8 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
         </div>
       </header>
 
-      <div className="flex-1 overflow-x-auto px-6 py-5">
-        <div className="flex gap-4 h-full items-start">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 py-5">
+        <div className="flex gap-4 h-full items-stretch">
           {board.columns.map((column) => (
             <div key={column.id} className="flex w-72 shrink-0 flex-col">
               {/* Column Header */}
@@ -219,7 +219,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
               </div>
 
               {/* Tasks */}
-              <div className="flex-1 rounded-xl p-1.5 space-y-2 min-h-[120px]">
+              <div className="flex-1 min-h-0 overflow-y-auto rounded-xl p-1.5 space-y-2">
                 {column.tasks.map((task) => {
                   const tags = task.tags ? task.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [];
                   const primaryTag = tags[0] || '';

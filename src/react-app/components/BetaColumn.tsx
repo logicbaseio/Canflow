@@ -71,7 +71,7 @@ export default function BetaColumn({
       {/* Tasks */}
       <div
         ref={setNodeRef}
-        className={`flex-1 rounded-xl p-1.5 space-y-2 min-h-[120px] transition-colors ${isOver ? 'bg-surface-2' : ''}`}
+        className={`flex-1 min-h-0 overflow-y-auto rounded-xl p-1.5 space-y-2 transition-colors ${isOver ? 'bg-surface-2' : ''}`}
       >
         <SortableContext items={column.tasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (

@@ -65,7 +65,7 @@ export default function KanbanColumn({
       {/* Tasks */}
       <div
         ref={setNodeRef}
-        className={`flex-1 rounded-xl p-1.5 space-y-2 min-h-[120px] transition-colors ${
+        className={`flex-1 min-h-0 overflow-y-auto rounded-xl p-1.5 space-y-2 transition-colors ${
           isOver ? 'bg-surface-2' : ''
         }`}
       >

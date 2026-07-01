@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   name          TEXT,
   token_hash    TEXT UNIQUE NOT NULL,
   token_prefix  TEXT,
+  token         TEXT,
   created_at    TIMESTAMPTZ DEFAULT now(),
   last_used_at  TIMESTAMPTZ
 );

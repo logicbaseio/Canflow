@@ -290,7 +290,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-4 h-full items-start">
+          <div className="flex gap-4 h-full items-stretch">
             {board.columns.map((column) => (
               <BetaColumn
                 key={column.id}

@@ -483,7 +483,7 @@ app.get("/tokens", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const rows = await query(
-    "SELECT id, name, token_prefix, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC",
+    "SELECT id, name, token_prefix, token, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC",
     [uid]
   );
   return c.json(rows);
@@ -499,11 +499,10 @@ app.post("/tokens", async (c) => {
   const hash = await sha256hex(token);
   const prefix = `${token.slice(0, 11)}…`;
   const row = await one(
-    "INSERT INTO api_tokens (user_id, name, token_hash, token_prefix) VALUES ($1, $2, $3, $4) RETURNING id, name, token_prefix, created_at",
-    [uid, name, hash, prefix]
+    "INSERT INTO api_tokens (user_id, name, token_hash, token_prefix, token) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, token_prefix, token, created_at",
+    [uid, name, hash, prefix, token]
   );
-  // Plaintext token is returned exactly once, here.
-  return c.json({ ...row, token }, 201);
+  return c.json(row, 201);
 });
 
 app.delete("/tokens/:id", async (c) => {

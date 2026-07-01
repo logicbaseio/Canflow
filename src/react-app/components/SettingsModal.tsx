@@ -22,6 +22,7 @@ interface TokenRow {
   id: number;
   name: string;
   token_prefix: string;
+  token?: string | null;
   created_at: string;
   last_used_at: string | null;
 }
@@ -86,7 +87,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       if (res.token) {
         setCreatedToken(res.token);
         setNewTokenName('');
-        setTokens((t) => [{ id: res.id, name: res.name, token_prefix: res.token_prefix, created_at: res.created_at, last_used_at: null }, ...t]);
+        setTokens((t) => [{ id: res.id, name: res.name, token_prefix: res.token_prefix, token: res.token, created_at: res.created_at, last_used_at: null }, ...t]);
       }
     } catch (e) {
       console.error('Failed to create token:', e);
@@ -144,7 +145,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const initial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
   const active = TABS.find((t) => t.id === tab)!;
-  const tok = createdToken || '<YOUR_TOKEN>';
+  const tok = createdToken || tokens.find((t) => t.token)?.token || '<YOUR_TOKEN>';
   const claudeCmd = `claude mcp add canflow --env CANFLOW_TOKEN=${tok} -- npx -y canflow-mcp`;
   const codexCfg = `[mcp_servers.canflow]\ncommand = "npx"\nargs = ["-y", "canflow-mcp"]\nenv = { CANFLOW_TOKEN = "${tok}" }`;
 
@@ -315,6 +316,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               {t.token_prefix} · {t.last_used_at ? 'used' : 'never used'}
                             </p>
                           </div>
+                          {t.token && (
+                            <button onClick={() => copy(t.token!, `row-${t.id}`)} className="btn btn-ghost h-8 px-2.5 text-ink-muted gap-1.5 text-[12px]" title="Copy token">
+                              {copied === `row-${t.id}` ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy key</>}
+                            </button>
+                          )}
                           <button onClick={() => revokeToken(t.id)} className="btn btn-ghost h-8 w-8 p-0 text-danger" title="Revoke"><Trash2 size={15} /></button>
                         </div>
                       ))
@@ -345,7 +351,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </div>
 
                   <p className="mt-3.5 text-[11.5px] text-ink-subtle leading-relaxed">
-                    <code className="font-mono">canflow-mcp</code> is published on npm, so these commands run as-is. Create or paste a token above to fill in <code className="font-mono">CANFLOW_TOKEN</code>. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Identified Bugs' phase, fix them, and move each to Fixing then Verified."</span>
+                    <code className="font-mono">canflow-mcp</code> is published on npm. Create a token above and it's filled into these commands automatically — just copy and run. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Identified Bugs' phase, fix them, and move each to Fixing then Verified."</span>
                   </p>
                 </div>
               </div>

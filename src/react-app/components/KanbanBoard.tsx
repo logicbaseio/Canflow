@@ -145,7 +145,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 py-5">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 h-full items-start">
+          <div className="flex gap-4 h-full items-stretch">
             {board.columns.map((column) => (
               <KanbanColumn
                 key={column.id}
