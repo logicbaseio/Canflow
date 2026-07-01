@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { authClient } from "@/react-app/lib/auth";
 
 type Mode = "sign-in" | "sign-up";
@@ -9,6 +9,7 @@ export default function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +28,6 @@ export default function AuthPage() {
         setLoading(false);
         return;
       }
-      // Session is now active — reload into the gated app.
       window.location.assign("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -36,95 +36,106 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-app text-ink">
-      {/* Brand panel */}
-      <div
-        className="hidden lg:flex w-[46%] flex-col justify-between p-12 relative overflow-hidden"
-        style={{ background: "var(--accent)", color: "var(--accent-fg)" }}
-      >
-        <div className="flex items-center gap-2.5">
-          <Logo className="h-7 w-7" />
-          <span className="text-[16px] font-semibold tracking-tight">Canflow</span>
-        </div>
-
-        <div className="max-w-sm">
-          <h1 className="text-[30px] leading-[1.15] font-semibold tracking-tight">
-            Plan tasks, ship roadmaps, run beta tests.
-          </h1>
-          <p className="mt-4 text-[14px] leading-relaxed opacity-70">
-            A minimal workspace for your boards — organized, private to you, and shareable when you want.
-          </p>
-          <div className="mt-8 space-y-2.5 text-[13px] opacity-80">
-            <Feature>Kanban, Roadmap & Beta-testing boards</Feature>
-            <Feature>Drag-and-drop, priorities, due dates</Feature>
-            <Feature>Public share links & tester invites</Feature>
-          </div>
-        </div>
-
-        <p className="text-[12px] opacity-50">Secured by Neon Auth</p>
-
-        {/* subtle decorative grid */}
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-app text-ink px-5 py-10">
+      {/* Ambient background */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
         <div
-          className="pointer-events-none absolute -right-24 -bottom-24 h-72 w-72 rounded-full opacity-[0.06]"
-          style={{ background: "var(--accent-fg)" }}
+          className="absolute inset-0 opacity-[0.55]"
+          style={{
+            backgroundImage: "radial-gradient(var(--border-strong) 1px, transparent 1px)",
+            backgroundSize: "22px 22px",
+            maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent)",
+            WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent)",
+          }}
+        />
+        <div
+          className="absolute left-1/2 top-[-10%] h-[420px] w-[720px] -translate-x-1/2 rounded-full blur-3xl opacity-[0.10]"
+          style={{ background: "var(--accent)" }}
         />
       </div>
 
-      {/* Form panel */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-[380px]">
-          <div className="lg:hidden flex items-center gap-2.5 mb-8 justify-center">
-            <Logo className="h-7 w-7" />
-            <span className="text-[16px] font-semibold tracking-tight">Canflow</span>
-          </div>
+      {/* Card */}
+      <div className="relative w-full max-w-[420px]">
+        <div className="flex items-center justify-center gap-2.5 mb-6">
+          <Logo className="h-8 w-8" />
+          <span className="text-[17px] font-semibold tracking-tight">Canflow</span>
+        </div>
 
-          <h2 className="text-[22px] font-semibold tracking-tight">
+        <div className="card shadow-pop p-7 sm:p-8">
+          <h1 className="text-[21px] font-semibold tracking-tight text-center">
             {isSignUp ? "Create your account" : "Welcome back"}
-          </h2>
-          <p className="mt-1 text-[13px] text-ink-muted">
+          </h1>
+          <p className="mt-1.5 text-[13px] text-ink-muted text-center">
             {isSignUp ? "Start organizing your work in minutes." : "Sign in to continue to your boards."}
           </p>
 
-          <form onSubmit={submit} className="mt-7 space-y-3.5">
+          {/* Segmented toggle */}
+          <div className="mt-6 flex gap-1 p-1 rounded-xl bg-surface-2">
+            {(["sign-in", "sign-up"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setMode(m); setError(null); }}
+                className={`flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors ${
+                  mode === m ? "bg-surface text-ink shadow-subtle" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                {m === "sign-in" ? "Sign in" : "Sign up"}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={submit} className="mt-5 space-y-3">
             {isSignUp && (
-              <Field label="Name">
+              <IconField icon={<User size={15} />}>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="field"
-                  placeholder="Your name"
+                  className="field pl-9"
+                  placeholder="Full name"
                   autoComplete="name"
                 />
-              </Field>
+              </IconField>
             )}
-            <Field label="Email">
+            <IconField icon={<Mail size={15} />}>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="field"
-                placeholder="you@example.com"
+                className="field pl-9"
+                placeholder="Email address"
                 autoComplete="email"
                 required
                 autoFocus
               />
-            </Field>
-            <Field label="Password">
+            </IconField>
+            <IconField icon={<Lock size={15} />}>
               <input
-                type="password"
+                type={showPw ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="field"
-                placeholder={isSignUp ? "At least 8 characters" : "Your password"}
+                className="field pl-9 pr-9"
+                placeholder={isSignUp ? "Create a password (8+ chars)" : "Password"}
                 autoComplete={isSignUp ? "new-password" : "current-password"}
                 required
                 minLength={8}
               />
-            </Field>
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                tabIndex={-1}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-subtle hover:text-ink"
+                aria-label={showPw ? "Hide password" : "Show password"}
+              >
+                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </IconField>
 
             {error && (
-              <p className="text-[12.5px] text-danger bg-[color:var(--danger)]/10 rounded-lg px-3 py-2">{error}</p>
+              <p className="rounded-lg px-3 py-2 text-[12.5px] text-danger" style={{ background: "color-mix(in srgb, var(--danger) 10%, transparent)" }}>
+                {error}
+              </p>
             )}
 
             <button type="submit" disabled={loading} className="btn btn-primary h-10 w-full mt-1">
@@ -138,39 +149,18 @@ export default function AuthPage() {
               )}
             </button>
           </form>
-
-          <p className="mt-6 text-center text-[13px] text-ink-muted">
-            {isSignUp ? "Already have an account?" : "New to Canflow?"}{" "}
-            <button
-              type="button"
-              onClick={() => {
-                setMode(isSignUp ? "sign-in" : "sign-up");
-                setError(null);
-              }}
-              className="font-medium text-ink hover:underline"
-            >
-              {isSignUp ? "Sign in" : "Create an account"}
-            </button>
-          </p>
         </div>
+
+        <p className="mt-5 text-center text-[11.5px] text-ink-subtle">Secured by Neon Auth</p>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function IconField({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-[12px] font-medium text-ink-muted">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Feature({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--accent-fg)", opacity: 0.6 }} />
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle">{icon}</span>
       {children}
     </div>
   );
@@ -179,10 +169,10 @@ function Feature({ children }: { children: React.ReactNode }) {
 function Logo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <rect width="100" height="100" rx="22" fill="var(--accent-fg)" />
-      <rect x="24" y="24" width="16" height="52" rx="4" fill="var(--accent)" />
-      <rect x="46" y="24" width="16" height="34" rx="4" fill="var(--accent)" />
-      <rect x="68" y="24" width="8" height="24" rx="3" fill="var(--accent)" />
+      <rect width="100" height="100" rx="22" fill="var(--accent)" />
+      <rect x="24" y="24" width="16" height="52" rx="4" fill="var(--accent-fg)" />
+      <rect x="46" y="24" width="16" height="34" rx="4" fill="var(--accent-fg)" />
+      <rect x="68" y="24" width="8" height="24" rx="3" fill="var(--accent-fg)" />
     </svg>
   );
 }
