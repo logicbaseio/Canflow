@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import Select from '@/react-app/components/ui/Select';
 import DatePicker from '@/react-app/components/ui/DatePicker';
 import type { Task, CreateTask, UpdateTask } from '@/shared/types';
@@ -22,12 +22,44 @@ const EMPTY = {
   tags: '',
   intensity: 0,
   category: '',
+  image_url: '',
 };
+
+/** Read an image file and downscale/compress it to a small JPEG data URL for storage. */
+async function fileToDataURL(file: File, maxDim = 1280, quality = 0.72): Promise<string> {
+  const dataUrl: string = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result as string);
+    r.onerror = () => rej(new Error('read failed'));
+    r.readAsDataURL(file);
+  });
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error('decode failed'));
+    img.src = dataUrl;
+  });
+  let { width, height } = img;
+  if (Math.max(width, height) > maxDim) {
+    const scale = maxDim / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
 
 export default function TaskModal({ task, columnId, boardType = 'kanban', categories = [], isOpen, onClose, onSave }: TaskModalProps) {
   const [formData, setFormData] = useState(EMPTY);
+  const [imgLoading, setImgLoading] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setImgError(null);
     if (task) {
       setFormData({
         title: task.title,
@@ -37,6 +69,7 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
         tags: task.tags || '',
         intensity: task.intensity || 0,
         category: task.category || '',
+        image_url: task.image_url || '',
       });
     } else {
       setFormData(EMPTY);
@@ -48,6 +81,25 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
   const dateLabel = isRoadmap ? 'Expected release' : isBetaTesting ? 'Reported date' : 'Due date';
   const taskLabel = isRoadmap ? 'Item' : isBetaTesting ? 'Report' : 'Task';
 
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setImgError('Please choose an image file.');
+      return;
+    }
+    setImgError(null);
+    setImgLoading(true);
+    try {
+      const dataUrl = await fileToDataURL(file);
+      setFormData((f) => ({ ...f, image_url: dataUrl }));
+    } catch {
+      setImgError('Could not process that image.');
+    } finally {
+      setImgLoading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const shared = {
@@ -58,6 +110,7 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
       tags: formData.tags || undefined,
       intensity: isBetaTesting ? formData.intensity : undefined,
       category: isBetaTesting ? (formData.category || undefined) : undefined,
+      image_url: formData.image_url || null,
     };
     if (task) {
       onSave(shared as UpdateTask);
@@ -75,13 +128,13 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
       style={{ background: 'var(--overlay)' }}
       onMouseDown={onClose}
     >
-      <div className="card w-full max-w-md shadow-pop" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 h-13 py-3.5 border-b border-line">
+      <div className="card w-full max-w-md shadow-pop flex flex-col max-h-[90vh]" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-line shrink-0">
           <h2 className="text-[14px] font-semibold text-ink">{task ? `Edit ${taskLabel.toLowerCase()}` : `New ${taskLabel.toLowerCase()}`}</h2>
           <button onClick={onClose} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle"><X size={16} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
           <Field label={`${taskLabel} title`}>
             <input
               type="text"
@@ -159,6 +212,52 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
               </Field>
             </>
           )}
+
+          {/* Attachment */}
+          <div>
+            <span className="mb-1.5 block text-[12px] font-medium text-ink-muted">Attachment</span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
+            {formData.image_url ? (
+              <div className="relative group rounded-lg overflow-hidden border border-line">
+                <img src={formData.image_url} alt="attachment" className="w-full max-h-52 object-contain bg-surface-2" />
+                <div className="absolute top-2 right-2 flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="btn btn-outline h-7 px-2 text-[12px] shadow-subtle"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData((f) => ({ ...f, image_url: '' }))}
+                    className="h-7 w-7 rounded-md flex items-center justify-center bg-surface border border-line text-danger hover:bg-surface-2 shadow-subtle"
+                    title="Remove image"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={imgLoading}
+                className="w-full rounded-lg border border-dashed border-line px-3 py-6 flex flex-col items-center gap-1.5 text-ink-subtle hover:text-ink hover:border-line-strong hover:bg-surface-2 transition-colors disabled:opacity-60"
+              >
+                {imgLoading ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} />}
+                <span className="text-[12.5px] font-medium">{imgLoading ? 'Processing…' : 'Add an image for reference'}</span>
+                <span className="text-[11px] text-ink-subtle">PNG, JPG — resized automatically</span>
+              </button>
+            )}
+            {imgError && <p className="mt-1.5 text-[12px] text-danger">{imgError}</p>}
+          </div>
 
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn btn-outline flex-1 h-9">Cancel</button>

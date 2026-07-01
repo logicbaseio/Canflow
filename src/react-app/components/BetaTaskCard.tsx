@@ -44,6 +44,9 @@ export default function BetaTaskCard({ task, onEdit, onDelete }: BetaTaskCardPro
         isDragging ? 'opacity-60 shadow-pop cursor-grabbing' : ''
       }`}
     >
+      {task.image_url && (
+        <img src={task.image_url} alt="" loading="lazy" className="mb-2.5 -mt-0.5 w-full max-h-36 rounded-md object-cover border border-line bg-surface-2" />
+      )}
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-[13px] font-medium leading-5 text-ink flex-1">{task.title}</h3>
         <div className="relative shrink-0 -mr-1 -mt-0.5">

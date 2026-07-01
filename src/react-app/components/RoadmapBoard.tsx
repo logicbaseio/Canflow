@@ -239,6 +239,10 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
                             <p className="mt-1 text-[12px] leading-[1.45] text-ink-muted line-clamp-2">{task.description}</p>
                           )}
 
+                          {task.image_url && (
+                            <img src={task.image_url} alt="" loading="lazy" className="mt-2 w-full max-h-32 rounded-md object-cover border border-line bg-surface-2" />
+                          )}
+
                           {primaryTag && (
                             <div className="mt-2.5">
                               <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-muted">

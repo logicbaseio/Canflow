@@ -218,6 +218,10 @@ function PublicColumns({
                         </p>
                       )}
 
+                      {task.image_url && (
+                        <img src={task.image_url} alt="" loading="lazy" className="mb-2.5 w-full max-h-36 rounded-md object-cover border border-line bg-surface-2" />
+                      )}
+
                       {primaryTag && (
                         <span className="inline-flex rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-muted">
                           {primaryTag}

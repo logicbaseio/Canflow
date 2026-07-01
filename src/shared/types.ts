@@ -68,6 +68,7 @@ export const TaskSchema = z.object({
   tags: z.string().nullable(),
   intensity: z.number().default(0),
   category: z.string().nullable(),
+  image_url: z.string().nullable(),
   upvotes: z.number().default(0),
   downvotes: z.number().default(0),
   created_at: z.string(),
@@ -84,6 +85,7 @@ export const CreateTaskSchema = z.object({
   tags: z.string().optional(),
   intensity: z.number().min(0).max(10).optional(),
   category: z.string().optional(),
+  image_url: z.string().nullable().optional(),
 });
 
 export const UpdateTaskSchema = z.object({
@@ -96,6 +98,7 @@ export const UpdateTaskSchema = z.object({
   tags: z.string().optional(),
   intensity: z.number().min(0).max(10).optional(),
   category: z.string().optional(),
+  image_url: z.string().nullable().optional(),
 });
 
 export const MoveTaskSchema = z.object({

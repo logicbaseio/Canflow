@@ -229,9 +229,9 @@ app.post("/tasks", zValidator("json", CreateTaskSchema), async (c) => {
   const data = c.req.valid("json");
   if (!(await ownsColumn(data.column_id, uid))) return c.json({ error: "Column not found" }, 404);
   const task = await one<Task>(
-    `INSERT INTO tasks (column_id, title, description, position, priority, due_date, tags, intensity, category, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) RETURNING *`,
-    [data.column_id, data.title, data.description ?? null, data.position, data.priority ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null]
+    `INSERT INTO tasks (column_id, title, description, position, priority, due_date, tags, intensity, category, image_url, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()) RETURNING *`,
+    [data.column_id, data.title, data.description ?? null, data.position, data.priority ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null, data.image_url ?? null]
   );
   return c.json(task, 201);
 });
@@ -261,6 +261,7 @@ app.put("/tasks/:id", zValidator("json", UpdateTaskSchema), async (c) => {
   set("tags", data.tags);
   set("intensity", data.intensity);
   set("category", data.category);
+  set("image_url", data.image_url);
   if (updates.length > 0) {
     updates.push(`updated_at = now()`);
     values.push(id);

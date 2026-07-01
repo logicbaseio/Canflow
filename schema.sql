@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   tags        TEXT,
   intensity   INTEGER DEFAULT 0,
   category    TEXT,
+  image_url   TEXT,
   upvotes     INTEGER DEFAULT 0,
   downvotes   INTEGER DEFAULT 0,
   created_at  TIMESTAMPTZ DEFAULT now(),
