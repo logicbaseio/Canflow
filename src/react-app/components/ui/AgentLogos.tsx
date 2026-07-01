@@ -1,24 +1,25 @@
-// Brand marks recreated as inline SVG for the Developer / connect UI.
+// Brand marks recreated as inline SVG. Both use a square 24×24 viewBox so they
+// never distort when rendered in a square container.
 
 /** Claude Code — orange pixel creature. */
 export function ClaudeCodeLogo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 26" className={className} aria-hidden shapeRendering="crispEdges">
+    <svg viewBox="0 0 24 24" className={className} aria-hidden shapeRendering="crispEdges">
       <g fill="#cd7b5b">
         {/* body */}
-        <rect x="6" y="3" width="20" height="13" />
+        <rect x="4" y="6" width="16" height="8" />
         {/* side nubs */}
-        <rect x="2" y="8" width="4" height="4" />
-        <rect x="26" y="8" width="4" height="4" />
-        {/* legs */}
-        <rect x="9" y="16" width="2.5" height="3.5" />
-        <rect x="13" y="16" width="2.5" height="3.5" />
-        <rect x="18.5" y="16" width="2.5" height="3.5" />
-        <rect x="22.5" y="16" width="2.5" height="3.5" />
+        <rect x="1.5" y="9" width="2.5" height="3" />
+        <rect x="20" y="9" width="2.5" height="3" />
+        {/* legs (two pairs) */}
+        <rect x="6" y="14" width="2" height="2.8" />
+        <rect x="9.2" y="14" width="2" height="2.8" />
+        <rect x="12.8" y="14" width="2" height="2.8" />
+        <rect x="16" y="14" width="2" height="2.8" />
       </g>
       {/* eyes */}
-      <rect x="11.5" y="6" width="2" height="4.5" fill="#fff" />
-      <rect x="18.5" y="6" width="2" height="4.5" fill="#fff" />
+      <rect x="8" y="8" width="1.6" height="3.4" fill="#fff" />
+      <rect x="14.4" y="8" width="1.6" height="3.4" fill="#fff" />
     </svg>
   );
 }
@@ -35,17 +36,17 @@ export function CodexLogo({ className }: { className?: string }) {
       </defs>
       {/* puffy cloud (overlapping circles share one userSpace gradient → seamless) */}
       <g fill="url(#canflow-codex-grad)">
-        <circle cx="12" cy="12.6" r="8" />
-        <circle cx="7.4" cy="9.6" r="4.2" />
-        <circle cx="13" cy="7.1" r="4.7" />
-        <circle cx="16.9" cy="9" r="4.4" />
-        <circle cx="17.1" cy="13.6" r="4.2" />
-        <circle cx="7.9" cy="15.6" r="4.2" />
-        <circle cx="12.6" cy="16.6" r="4.4" />
+        <circle cx="12" cy="12.6" r="7.6" />
+        <circle cx="7.6" cy="9.8" r="4" />
+        <circle cx="13" cy="7.4" r="4.5" />
+        <circle cx="16.7" cy="9.2" r="4.2" />
+        <circle cx="16.8" cy="13.4" r="4" />
+        <circle cx="8.1" cy="15.2" r="4" />
+        <circle cx="12.5" cy="16.2" r="4.2" />
       </g>
       {/* terminal >_ */}
-      <path d="M8.1 9.1 L11.3 12 L8.1 14.9" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <rect x="12.4" y="13.3" width="4" height="1.8" rx="0.9" fill="#fff" />
+      <path d="M8.3 9.4 L11.2 12 L8.3 14.6" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <rect x="12.3" y="13.1" width="3.8" height="1.7" rx="0.85" fill="#fff" />
     </svg>
   );
 }

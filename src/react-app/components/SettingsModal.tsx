@@ -191,7 +191,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto pt-14 sm:pt-0">
-          <div className="max-w-2xl mx-auto px-6 sm:px-10 py-9">
+          <div className="max-w-2xl px-8 sm:px-14 py-9">
             <div className="mb-7">
               <h2 className="text-[20px] font-semibold tracking-tight">{active.title}</h2>
               <p className="mt-1 text-[13px] text-ink-muted">{active.subtitle}</p>
@@ -325,24 +325,26 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div>
                   <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Connect your agent</p>
 
-                  <div className="space-y-4 max-w-xl">
-                    <div>
-                      <div className="mb-2 flex items-center gap-2 text-[13.5px] font-semibold text-ink">
-                        <ClaudeCodeLogo className="h-5 w-5" /> Claude Code
-                      </div>
-                      <CodeBlock text={claudeCmd} onCopy={() => copy(claudeCmd, 'claude')} copied={copied === 'claude'} />
-                    </div>
-
-                    <div>
-                      <div className="mb-2 flex items-center gap-2 text-[13.5px] font-semibold text-ink">
-                        <CodexLogo className="h-5 w-5" /> Codex
-                        <span className="font-normal text-[12.5px] text-ink-muted">— add to <code className="font-mono text-[11.5px]">~/.codex/config.toml</code></span>
-                      </div>
-                      <CodeBlock text={codexCfg} onCopy={() => copy(codexCfg, 'codex')} copied={copied === 'codex'} />
-                    </div>
+                  <div className="space-y-3">
+                    <AgentCard
+                      logo={<ClaudeCodeLogo className="h-8 w-8" />}
+                      name="Claude Code"
+                      hint="Run once in your terminal"
+                      code={claudeCmd}
+                      onCopy={() => copy(claudeCmd, 'claude')}
+                      copied={copied === 'claude'}
+                    />
+                    <AgentCard
+                      logo={<CodexLogo className="h-8 w-8" />}
+                      name="Codex"
+                      hint="Add to ~/.codex/config.toml"
+                      code={codexCfg}
+                      onCopy={() => copy(codexCfg, 'codex')}
+                      copied={copied === 'codex'}
+                    />
                   </div>
 
-                  <p className="mt-3 text-[11.5px] text-ink-subtle leading-relaxed max-w-xl">
+                  <p className="mt-3.5 text-[11.5px] text-ink-subtle leading-relaxed">
                     <code className="font-mono">canflow-mcp</code> is published on npm, so these commands run as-is. Create or paste a token above to fill in <code className="font-mono">CANFLOW_TOKEN</code>. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Identified Bugs' phase, fix them, and move each to Fixing then Verified."</span>
                   </p>
                 </div>
@@ -355,13 +357,22 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   );
 }
 
-function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: () => void; copied: boolean }) {
+function AgentCard({ logo, name, hint, code, onCopy, copied }: {
+  logo: React.ReactNode; name: string; hint: string; code: string; onCopy: () => void; copied: boolean;
+}) {
   return (
-    <div className="relative rounded-xl border border-line bg-surface-2">
-      <pre className="overflow-x-auto p-3.5 pr-11 text-[12px] font-mono leading-relaxed text-ink whitespace-pre-wrap break-all">{text}</pre>
-      <button onClick={onCopy} className="absolute top-2.5 right-2.5 h-7 w-7 rounded-md flex items-center justify-center text-ink-subtle hover:bg-surface hover:text-ink transition-colors" title="Copy">
-        {copied ? <Check size={15} /> : <Copy size={15} />}
-      </button>
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-line">
+        <span className="shrink-0">{logo}</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-semibold text-ink leading-tight">{name}</p>
+          <p className="text-[11.5px] text-ink-subtle truncate">{hint}</p>
+        </div>
+        <button onClick={onCopy} className="btn btn-outline h-8 px-3 gap-1.5 text-[12.5px] shrink-0">
+          {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+        </button>
+      </div>
+      <pre className="overflow-x-auto px-4 py-3.5 text-[12px] font-mono leading-relaxed text-ink whitespace-pre-wrap break-all bg-surface-2">{code}</pre>
     </div>
   );
 }
