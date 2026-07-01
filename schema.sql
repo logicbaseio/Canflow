@@ -11,9 +11,11 @@ CREATE TABLE IF NOT EXISTS boards (
   is_public     BOOLEAN DEFAULT FALSE,
   public_theme  TEXT DEFAULT 'auto',
   invite_mode   TEXT DEFAULT 'none',
+  owner_id      TEXT,          -- neon_auth.user.id of the board owner (null = legacy/shared)
   created_at    TIMESTAMPTZ DEFAULT now(),
   updated_at    TIMESTAMPTZ DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS idx_boards_owner ON boards(owner_id);
 
 CREATE TABLE IF NOT EXISTS columns (
   id          SERIAL PRIMARY KEY,

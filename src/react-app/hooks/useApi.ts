@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { authedFetch } from '@/react-app/lib/auth';
 import type { Board, BoardWithColumns, CreateBoard, UpdateBoard, CreateTask, UpdateTask, CreateColumn, UpdateColumn, MoveTask, Invitation, CreateInvitation, BetaCategory, CreateBetaCategory } from '@/shared/types';
 
 const API_BASE = '/api';
@@ -12,7 +13,7 @@ function useApi<T>(url: string, dependencies: any[] = []) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}${url}`);
+      const response = await authedFetch(`${API_BASE}${url}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -43,7 +44,7 @@ export function useBoard(id: number | null) {
 }
 
 export async function createBoard(board: CreateBoard): Promise<Board> {
-  const response = await fetch(`${API_BASE}/boards`, {
+  const response = await authedFetch(`${API_BASE}/boards`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(board),
@@ -54,7 +55,7 @@ export async function createBoard(board: CreateBoard): Promise<Board> {
 
 export async function updateBoard(id: number, board: UpdateBoard): Promise<Board> {
   console.log('Updating board:', id, 'with data:', board);
-  const response = await fetch(`${API_BASE}/boards/${id}`, {
+  const response = await authedFetch(`${API_BASE}/boards/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(board),
@@ -70,7 +71,7 @@ export async function updateBoard(id: number, board: UpdateBoard): Promise<Board
 }
 
 export async function deleteBoard(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/boards/${id}`, {
+  const response = await authedFetch(`${API_BASE}/boards/${id}`, {
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to delete board');
@@ -78,7 +79,7 @@ export async function deleteBoard(id: number): Promise<void> {
 
 // Tasks API
 export async function createTask(task: CreateTask): Promise<any> {
-  const response = await fetch(`${API_BASE}/tasks`, {
+  const response = await authedFetch(`${API_BASE}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(task),
@@ -88,7 +89,7 @@ export async function createTask(task: CreateTask): Promise<any> {
 }
 
 export async function updateTask(id: number, task: UpdateTask): Promise<any> {
-  const response = await fetch(`${API_BASE}/tasks/${id}`, {
+  const response = await authedFetch(`${API_BASE}/tasks/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(task),
@@ -98,7 +99,7 @@ export async function updateTask(id: number, task: UpdateTask): Promise<any> {
 }
 
 export async function moveTask(id: number, move: MoveTask): Promise<any> {
-  const response = await fetch(`${API_BASE}/tasks/${id}/move`, {
+  const response = await authedFetch(`${API_BASE}/tasks/${id}/move`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(move),
@@ -108,7 +109,7 @@ export async function moveTask(id: number, move: MoveTask): Promise<any> {
 }
 
 export async function deleteTask(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/tasks/${id}`, {
+  const response = await authedFetch(`${API_BASE}/tasks/${id}`, {
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to delete task');
@@ -116,7 +117,7 @@ export async function deleteTask(id: number): Promise<void> {
 
 // Columns API
 export async function createColumn(column: CreateColumn): Promise<any> {
-  const response = await fetch(`${API_BASE}/columns`, {
+  const response = await authedFetch(`${API_BASE}/columns`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(column),
@@ -126,7 +127,7 @@ export async function createColumn(column: CreateColumn): Promise<any> {
 }
 
 export async function updateColumn(id: number, column: UpdateColumn): Promise<any> {
-  const response = await fetch(`${API_BASE}/columns/${id}`, {
+  const response = await authedFetch(`${API_BASE}/columns/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(column),
@@ -136,7 +137,7 @@ export async function updateColumn(id: number, column: UpdateColumn): Promise<an
 }
 
 export async function deleteColumn(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/columns/${id}`, {
+  const response = await authedFetch(`${API_BASE}/columns/${id}`, {
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to delete column');
@@ -149,7 +150,7 @@ export function usePublicBoard(publicKey: string) {
 
 // Invitations API
 export async function createInvitation(invitation: CreateInvitation): Promise<Invitation> {
-  const response = await fetch(`${API_BASE}/invitations`, {
+  const response = await authedFetch(`${API_BASE}/invitations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(invitation),
@@ -164,7 +165,7 @@ export function useInvitations(boardId: number) {
 
 // Beta Categories API
 export async function createBetaCategory(category: CreateBetaCategory): Promise<BetaCategory> {
-  const response = await fetch(`${API_BASE}/beta-categories`, {
+  const response = await authedFetch(`${API_BASE}/beta-categories`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(category),

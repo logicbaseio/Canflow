@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
+import { jwtVerify, createRemoteJWKSet } from "jose";
+import type { Context } from "hono";
 import {
   CreateBoardSchema,
   UpdateBoardSchema,
@@ -23,42 +25,76 @@ const app = new Hono().basePath("/api");
 
 app.use("*", cors());
 
-/* ----------------------------- Boards ----------------------------- */
+/* ----------------------------- Auth (Neon Auth / Better Auth) ----------------------------- */
+
+const JWKS_URL =
+  process.env.NEON_AUTH_JWKS_URL ||
+  "https://ep-soft-brook-atvks9ki.neonauth.c-9.us-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json";
+const jwks = createRemoteJWKSet(new URL(JWKS_URL));
+
+/** Verify the Neon Auth JWT from the Authorization header; returns the user id (sub) or null. */
+async function getUserId(c: Context): Promise<string | null> {
+  const header = c.req.header("Authorization");
+  if (!header?.startsWith("Bearer ")) return null;
+  try {
+    const { payload } = await jwtVerify(header.slice(7), jwks);
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+async function ownsBoard(boardId: number, uid: string): Promise<boolean> {
+  return !!(await one("SELECT 1 FROM boards WHERE id = $1 AND owner_id = $2", [boardId, uid]));
+}
+async function ownsColumn(columnId: number, uid: string): Promise<boolean> {
+  return !!(await one(
+    "SELECT 1 FROM columns c JOIN boards b ON b.id = c.board_id WHERE c.id = $1 AND b.owner_id = $2",
+    [columnId, uid]
+  ));
+}
+async function ownsTask(taskId: number, uid: string): Promise<boolean> {
+  return !!(await one(
+    "SELECT 1 FROM tasks t JOIN columns c ON c.id = t.column_id JOIN boards b ON b.id = c.board_id WHERE t.id = $1 AND b.owner_id = $2",
+    [taskId, uid]
+  ));
+}
+
+/* ----------------------------- Boards (auth required) ----------------------------- */
 
 app.get("/boards", async (c) => {
-  const boards = await query<Board>("SELECT * FROM boards ORDER BY created_at DESC");
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const boards = await query<Board>("SELECT * FROM boards WHERE owner_id = $1 ORDER BY created_at DESC", [uid]);
   return c.json(boards);
 });
 
 app.get("/boards/:id", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
-  const board = await one<Board>("SELECT * FROM boards WHERE id = $1", [id]);
+  const board = await one<Board>("SELECT * FROM boards WHERE id = $1 AND owner_id = $2", [id, uid]);
   if (!board) return c.json({ error: "Board not found" }, 404);
 
-  const columns = await query<Column>(
-    "SELECT * FROM columns WHERE board_id = $1 ORDER BY position",
-    [id]
-  );
-
+  const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [id]);
   const boardWithColumns: BoardWithColumns = { ...board, columns: [] };
   for (const column of columns) {
-    const tasks = await query<Task>(
-      "SELECT * FROM tasks WHERE column_id = $1 ORDER BY position",
-      [column.id]
-    );
+    const tasks = await query<Task>("SELECT * FROM tasks WHERE column_id = $1 ORDER BY position", [column.id]);
     boardWithColumns.columns.push({ ...column, tasks });
   }
   return c.json(boardWithColumns);
 });
 
 app.post("/boards", zValidator("json", CreateBoardSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
   const publicKey = crypto.randomUUID();
 
   const board = await one<Board>(
-    `INSERT INTO boards (title, description, color, board_type, public_key, updated_at)
-     VALUES ($1, $2, $3, $4, $5, now()) RETURNING *`,
-    [data.title, data.description ?? null, data.color ?? null, data.board_type ?? "kanban", publicKey]
+    `INSERT INTO boards (title, description, color, board_type, public_key, owner_id, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, now()) RETURNING *`,
+    [data.title, data.description ?? null, data.color ?? null, data.board_type ?? "kanban", publicKey, uid]
   );
 
   const defaultColumns =
@@ -89,12 +125,14 @@ app.post("/boards", zValidator("json", CreateBoardSchema), async (c) => {
       [board!.id, col.title, col.position, col.color]
     );
   }
-
   return c.json(board, 201);
 });
 
 app.put("/boards/:id", zValidator("json", UpdateBoardSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
+  if (!(await ownsBoard(id, uid))) return c.json({ error: "Board not found" }, 404);
   const data = c.req.valid("json");
 
   const updates: string[] = [];
@@ -119,32 +157,38 @@ app.put("/boards/:id", zValidator("json", UpdateBoardSchema), async (c) => {
     values.push(id);
     await query(`UPDATE boards SET ${updates.join(", ")} WHERE id = $${i}`, values);
   }
-
   const board = await one<Board>("SELECT * FROM boards WHERE id = $1", [id]);
   return c.json(board);
 });
 
 app.delete("/boards/:id", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
-  // FK ON DELETE CASCADE removes columns/tasks/invitations/categories.
+  if (!(await ownsBoard(id, uid))) return c.json({ error: "Board not found" }, 404);
   await query("DELETE FROM boards WHERE id = $1", [id]);
   return c.json({ success: true });
 });
 
-/* ----------------------------- Columns ----------------------------- */
+/* ----------------------------- Columns (auth + ownership) ----------------------------- */
 
 app.post("/columns", zValidator("json", CreateColumnSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
+  if (!(await ownsBoard(data.board_id, uid))) return c.json({ error: "Board not found" }, 404);
   const column = await one<Column>(
-    `INSERT INTO columns (board_id, title, position, color, updated_at)
-     VALUES ($1, $2, $3, $4, now()) RETURNING *`,
+    `INSERT INTO columns (board_id, title, position, color, updated_at) VALUES ($1, $2, $3, $4, now()) RETURNING *`,
     [data.board_id, data.title, data.position, data.color ?? null]
   );
   return c.json(column, 201);
 });
 
 app.put("/columns/:id", zValidator("json", UpdateColumnSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
+  if (!(await ownsColumn(id, uid))) return c.json({ error: "Column not found" }, 404);
   const data = c.req.valid("json");
 
   const updates: string[] = [];
@@ -159,47 +203,44 @@ app.put("/columns/:id", zValidator("json", UpdateColumnSchema), async (c) => {
   set("title", data.title);
   set("position", data.position);
   set("color", data.color);
-
   if (updates.length > 0) {
     updates.push(`updated_at = now()`);
     values.push(id);
     await query(`UPDATE columns SET ${updates.join(", ")} WHERE id = $${i}`, values);
   }
-
   const column = await one<Column>("SELECT * FROM columns WHERE id = $1", [id]);
   return c.json(column);
 });
 
 app.delete("/columns/:id", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
+  if (!(await ownsColumn(id, uid))) return c.json({ error: "Column not found" }, 404);
   await query("DELETE FROM columns WHERE id = $1", [id]);
   return c.json({ success: true });
 });
 
-/* ----------------------------- Tasks ----------------------------- */
+/* ----------------------------- Tasks (auth + ownership) ----------------------------- */
 
 app.post("/tasks", zValidator("json", CreateTaskSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
+  if (!(await ownsColumn(data.column_id, uid))) return c.json({ error: "Column not found" }, 404);
   const task = await one<Task>(
     `INSERT INTO tasks (column_id, title, description, position, priority, due_date, tags, intensity, category, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) RETURNING *`,
-    [
-      data.column_id,
-      data.title,
-      data.description ?? null,
-      data.position,
-      data.priority ?? null,
-      data.due_date ?? null,
-      data.tags ?? null,
-      data.intensity ?? 0,
-      data.category ?? null,
-    ]
+    [data.column_id, data.title, data.description ?? null, data.position, data.priority ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null]
   );
   return c.json(task, 201);
 });
 
 app.put("/tasks/:id", zValidator("json", UpdateTaskSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
+  if (!(await ownsTask(id, uid))) return c.json({ error: "Task not found" }, 404);
   const data = c.req.valid("json");
 
   const updates: string[] = [];
@@ -220,19 +261,20 @@ app.put("/tasks/:id", zValidator("json", UpdateTaskSchema), async (c) => {
   set("tags", data.tags);
   set("intensity", data.intensity);
   set("category", data.category);
-
   if (updates.length > 0) {
     updates.push(`updated_at = now()`);
     values.push(id);
     await query(`UPDATE tasks SET ${updates.join(", ")} WHERE id = $${i}`, values);
   }
-
   const task = await one<Task>("SELECT * FROM tasks WHERE id = $1", [id]);
   return c.json(task);
 });
 
 app.patch("/tasks/:id/move", zValidator("json", MoveTaskSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
+  if (!(await ownsTask(id, uid))) return c.json({ error: "Task not found" }, 404);
   const { column_id, position } = c.req.valid("json");
   const task = await one<Task>(
     `UPDATE tasks SET column_id = $1, position = $2, updated_at = now() WHERE id = $3 RETURNING *`,
@@ -242,32 +284,24 @@ app.patch("/tasks/:id/move", zValidator("json", MoveTaskSchema), async (c) => {
 });
 
 app.delete("/tasks/:id", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
+  if (!(await ownsTask(id, uid))) return c.json({ error: "Task not found" }, 404);
   await query("DELETE FROM tasks WHERE id = $1", [id]);
   return c.json({ success: true });
 });
 
-/* ----------------------------- Public ----------------------------- */
+/* ----------------------------- Public (open, no auth) ----------------------------- */
 
 app.get("/public/:publicKey", async (c) => {
   const publicKey = c.req.param("publicKey");
-  const board = await one<Board>(
-    "SELECT * FROM boards WHERE public_key = $1 AND is_public = TRUE",
-    [publicKey]
-  );
+  const board = await one<Board>("SELECT * FROM boards WHERE public_key = $1 AND is_public = TRUE", [publicKey]);
   if (!board) return c.json({ error: "Board not found or not public" }, 404);
-
-  const columns = await query<Column>(
-    "SELECT * FROM columns WHERE board_id = $1 ORDER BY position",
-    [board.id]
-  );
-
+  const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [board.id]);
   const boardWithColumns: BoardWithColumns = { ...board, columns: [] };
   for (const column of columns) {
-    const tasks = await query<Task>(
-      "SELECT * FROM tasks WHERE column_id = $1 ORDER BY position",
-      [column.id]
-    );
+    const tasks = await query<Task>("SELECT * FROM tasks WHERE column_id = $1 ORDER BY position", [column.id]);
     boardWithColumns.columns.push({ ...column, tasks });
   }
   return c.json(boardWithColumns);
@@ -277,25 +311,20 @@ app.post("/public/:publicKey/tasks/:id/vote", zValidator("json", VoteTaskSchema)
   const publicKey = c.req.param("publicKey");
   const taskId = parseInt(c.req.param("id"));
   const { vote_type } = c.req.valid("json");
-
-  const board = await one<{ id: number }>(
-    "SELECT id FROM boards WHERE public_key = $1 AND is_public = TRUE",
-    [publicKey]
-  );
+  const board = await one<{ id: number }>("SELECT id FROM boards WHERE public_key = $1 AND is_public = TRUE", [publicKey]);
   if (!board) return c.json({ error: "Board not found or not public" }, 404);
-
   const column = vote_type === "upvote" ? "upvotes" : "downvotes";
-  const task = await one<Task>(
-    `UPDATE tasks SET ${column} = ${column} + 1 WHERE id = $1 RETURNING *`,
-    [taskId]
-  );
+  const task = await one<Task>(`UPDATE tasks SET ${column} = ${column} + 1 WHERE id = $1 RETURNING *`, [taskId]);
   return c.json(task);
 });
 
-/* ----------------------------- Invitations ----------------------------- */
+/* ----------------------------- Invitations (auth + ownership) ----------------------------- */
 
 app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
+  if (!(await ownsBoard(data.board_id, uid))) return c.json({ error: "Board not found" }, 404);
   const token = crypto.randomUUID();
 
   try {
@@ -315,46 +344,25 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
     );
 
     const inviteUrl = `${new URL(c.req.url).origin}/invited/${token}`;
-
     let emailSent = false;
     let emailError: string | null = null;
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
     if (RESEND_API_KEY) {
       try {
-        const emailContent = {
-          from: "onboarding@resend.dev",
-          to: data.email,
-          subject: `You're invited to beta test: ${board.title}`,
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="text-align: center; margin-bottom: 40px;">
-                <h1 style="color: #1f2937; margin-bottom: 8px;">Beta Testing Invitation</h1>
-                <p style="color: #6b7280; font-size: 16px;">You've been invited to participate in beta testing</p>
-              </div>
-              <div style="background: #f9fafb; border-radius: 12px; padding: 24px; margin-bottom: 32px;">
-                <h2 style="color: #1f2937; margin-top: 0; margin-bottom: 16px;">${board.title}</h2>
-                ${columnName ? `<p style="color: #6b7280; margin-bottom: 16px;">You've been assigned to the <strong>${columnName}</strong> phase.</p>` : ""}
-                <p style="color: #6b7280; margin-bottom: 20px;">Help us improve by reporting bugs and providing feedback.</p>
-                <div style="text-align: center;">
-                  <a href="${inviteUrl}" style="background: #1d1d1f; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500; display: inline-block;">Join Beta Testing</a>
-                </div>
-              </div>
-              <div style="text-align: center; color: #9ca3af; font-size: 14px;">
-                <p>Or copy this link:</p>
-                <p style="word-break: break-all; background: #f3f4f6; padding: 8px; border-radius: 4px; font-family: monospace;">${inviteUrl}</p>
-              </div>
-            </div>`,
-        };
-
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify(emailContent),
+          body: JSON.stringify({
+            from: "onboarding@resend.dev",
+            to: data.email,
+            subject: `You're invited to beta test: ${board.title}`,
+            html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">Beta Testing Invitation</h1><h2 style="color:#1f2937">${board.title}</h2>${columnName ? `<p style="color:#6b7280">Phase: <strong>${columnName}</strong></p>` : ""}<p style="color:#6b7280">Help us improve by reporting bugs and feedback.</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">Join Beta Testing</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
+          }),
         });
-        const responseData = (await response.json()) as { message?: string };
+        const rd = (await response.json()) as { message?: string };
         if (response.ok) emailSent = true;
-        else emailError = responseData.message || `HTTP ${response.status}`;
+        else emailError = rd.message || `HTTP ${response.status}`;
       } catch (error) {
         emailError = error instanceof Error ? error.message : "Unknown error";
       }
@@ -377,26 +385,26 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
     );
   } catch (error) {
     console.error("Database error creating invitation:", error);
-    return c.json(
-      { error: "Failed to create invitation", details: error instanceof Error ? error.message : "Unknown error" },
-      500
-    );
+    return c.json({ error: "Failed to create invitation", details: error instanceof Error ? error.message : "Unknown error" }, 500);
   }
 });
 
 app.get("/invitations/:boardId", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const boardId = parseInt(c.req.param("boardId"));
-  const invitations = await query(
-    "SELECT * FROM invitations WHERE board_id = $1 ORDER BY created_at DESC",
-    [boardId]
-  );
+  if (!(await ownsBoard(boardId, uid))) return c.json({ error: "Board not found" }, 404);
+  const invitations = await query("SELECT * FROM invitations WHERE board_id = $1 ORDER BY created_at DESC", [boardId]);
   return c.json(invitations);
 });
 
-/* ----------------------------- Beta categories ----------------------------- */
+/* ----------------------------- Beta categories (auth + ownership) ----------------------------- */
 
 app.post("/beta-categories", zValidator("json", CreateBetaCategorySchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
+  if (!(await ownsBoard(data.board_id, uid))) return c.json({ error: "Board not found" }, 404);
   const category = await one(
     `INSERT INTO beta_categories (board_id, name, color, updated_at) VALUES ($1, $2, $3, now()) RETURNING *`,
     [data.board_id, data.name, data.color ?? "#6b7280"]
@@ -405,15 +413,15 @@ app.post("/beta-categories", zValidator("json", CreateBetaCategorySchema), async
 });
 
 app.get("/beta-categories/:boardId", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const boardId = parseInt(c.req.param("boardId"));
-  const categories = await query(
-    "SELECT * FROM beta_categories WHERE board_id = $1 ORDER BY name",
-    [boardId]
-  );
+  if (!(await ownsBoard(boardId, uid))) return c.json({ error: "Board not found" }, 404);
+  const categories = await query("SELECT * FROM beta_categories WHERE board_id = $1 ORDER BY name", [boardId]);
   return c.json(categories);
 });
 
-/* ----------------------------- Invited access ----------------------------- */
+/* ----------------------------- Invited access (open, token-scoped) ----------------------------- */
 
 app.get("/invited/:token", async (c) => {
   const token = c.req.param("token");
@@ -422,24 +430,14 @@ app.get("/invited/:token", async (c) => {
     [token]
   );
   if (!invitation) return c.json({ error: "Invalid or expired invitation" }, 404);
-
   const board = await one<Board>("SELECT * FROM boards WHERE id = $1", [invitation.board_id]);
   if (!board) return c.json({ error: "Board not found" }, 404);
-
-  const columns = await query<Column>(
-    "SELECT * FROM columns WHERE board_id = $1 ORDER BY position",
-    [invitation.board_id]
-  );
-
+  const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [invitation.board_id]);
   const boardWithColumns: BoardWithColumns = { ...board, columns: [] };
   for (const column of columns) {
-    const tasks = await query<Task>(
-      "SELECT * FROM tasks WHERE column_id = $1 ORDER BY position",
-      [column.id]
-    );
+    const tasks = await query<Task>("SELECT * FROM tasks WHERE column_id = $1 ORDER BY position", [column.id]);
     boardWithColumns.columns.push({ ...column, tasks });
   }
-
   return c.json({ board: boardWithColumns, invitation, allowedColumnId: invitation.column_id });
 });
 

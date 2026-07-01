@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, MoreHorizontal, Edit2, Trash2, Link2, Globe, Lock } from 'lucide-react';
+import { Plus, MoreHorizontal, Edit2, Trash2, Link2, Globe, Lock, LogOut } from 'lucide-react';
 import { createBoard, deleteBoard, updateBoard } from '@/react-app/hooks/useApi';
 import { useAppContext } from '@/react-app/context/AppContext';
 import DarkModeToggle from '@/react-app/components/DarkModeToggle';
 import EditBoardModal from '@/react-app/components/EditBoardModal';
 import { useDialog } from '@/react-app/components/ui/Dialog';
+import { authClient, useSession } from '@/react-app/lib/auth';
 import type { CreateBoard, Board, UpdateBoard } from '@/shared/types';
 
 interface BoardSelectorProps {
@@ -254,11 +255,8 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2.5 border-t border-line flex items-center justify-between">
-        <span className="pl-1 text-[11px] text-ink-subtle">
-          {boards?.length ?? 0} {boards?.length === 1 ? 'board' : 'boards'}
-        </span>
-        <DarkModeToggle />
+      <div className="border-t border-line">
+        <UserFooter boardCount={boards?.length ?? 0} />
       </div>
 
       <EditBoardModal
@@ -279,5 +277,42 @@ function Logo({ className }: { className?: string }) {
       <rect x="46" y="24" width="16" height="34" rx="4" fill="var(--accent-fg)" />
       <rect x="68" y="24" width="8" height="24" rx="3" fill="var(--accent-fg)" />
     </svg>
+  );
+}
+
+function UserFooter({ boardCount }: { boardCount: number }) {
+  const { data } = useSession();
+  const user = data?.user;
+  const label = user?.name || user?.email || 'Account';
+  const initial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
+
+  const signOut = async () => {
+    try { await authClient.signOut(); } catch { /* ignore */ }
+    window.location.assign('/');
+  };
+
+  return (
+    <div className="px-2.5 py-2">
+      <div className="flex items-center gap-2 rounded-lg px-1.5 py-1">
+        <span className="h-6 w-6 rounded-full bg-accent-soft flex items-center justify-center text-[11px] font-semibold text-ink shrink-0">
+          {initial}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12.5px] font-medium text-ink">{label}</span>
+          {user?.email && user?.name && (
+            <span className="block truncate text-[11px] text-ink-subtle">{user.email}</span>
+          )}
+        </span>
+        <button onClick={signOut} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle" title="Sign out">
+          <LogOut size={15} />
+        </button>
+      </div>
+      <div className="mt-1 flex items-center justify-between px-1.5">
+        <span className="text-[11px] text-ink-subtle">
+          {boardCount} {boardCount === 1 ? 'board' : 'boards'}
+        </span>
+        <DarkModeToggle />
+      </div>
+    </div>
   );
 }

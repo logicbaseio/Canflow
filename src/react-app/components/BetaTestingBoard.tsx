@@ -18,6 +18,7 @@ import Select from '@/react-app/components/ui/Select';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import { useDialog } from '@/react-app/components/ui/Dialog';
+import { authedFetch } from '@/react-app/lib/auth';
 import { useBoard, createTask, updateTask, deleteTask, moveTask, createColumn, updateColumn, deleteColumn, useBetaCategories } from '@/react-app/hooks/useApi';
 import type { Task, Column, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
 
@@ -193,7 +194,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
     }
 
     try {
-      const response = await fetch('/api/invitations', {
+      const response = await authedFetch('/api/invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -231,7 +232,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
     if (!newCategoryName.trim()) return;
 
     try {
-      const response = await fetch('/api/beta-categories', {
+      const response = await authedFetch('/api/beta-categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
