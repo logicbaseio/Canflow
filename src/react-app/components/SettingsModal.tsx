@@ -26,11 +26,11 @@ interface TokenRow {
   last_used_at: string | null;
 }
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'profile', label: 'Profile', icon: <UserIcon size={15} /> },
-  { id: 'organization', label: 'Organization', icon: <Building2 size={15} /> },
-  { id: 'members', label: 'Members', icon: <Users size={15} /> },
-  { id: 'developer', label: 'Developer', icon: <Terminal size={15} /> },
+const TABS: { id: Tab; label: string; icon: React.ReactNode; title: string; subtitle: string }[] = [
+  { id: 'profile', label: 'Profile', icon: <UserIcon size={16} />, title: 'Profile', subtitle: 'Your account details.' },
+  { id: 'organization', label: 'Organization', icon: <Building2 size={16} />, title: 'Organization', subtitle: 'Name your workspace.' },
+  { id: 'members', label: 'Members', icon: <Users size={16} />, title: 'Members', subtitle: 'People with access and invited testers.' },
+  { id: 'developer', label: 'Developer', icon: <Terminal size={16} />, title: 'Developer', subtitle: 'Connect Claude Code or Codex to work your issues over MCP.' },
 ];
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
@@ -67,6 +67,13 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .finally(() => setLoadingInvites(false));
     authedFetch('/api/tokens').then((r) => r.json()).then((d) => setTokens(Array.isArray(d) ? d : [])).catch(() => {});
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
   const createToken = async () => {
     setCreatingToken(true);
@@ -136,183 +143,212 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   if (!isOpen) return null;
 
   const initial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
+  const active = TABS.find((t) => t.id === tab)!;
   const tok = createdToken || '<YOUR_TOKEN>';
   const claudeCmd = `claude mcp add canflow --env CANFLOW_TOKEN=${tok} -- npx -y canflow-mcp`;
   const codexCfg = `[mcp_servers.canflow]\ncommand = "npx"\nargs = ["-y", "canflow-mcp"]\nenv = { CANFLOW_TOKEN = "${tok}" }`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'var(--overlay)' }} onMouseDown={onClose}>
-      <div className="card w-full max-w-lg shadow-pop flex flex-col max-h-[85vh]" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-line shrink-0">
-          <h2 className="text-[14px] font-semibold text-ink">Settings</h2>
-          <button onClick={onClose} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle"><X size={16} /></button>
+    <div className="fixed inset-0 z-50 bg-app text-ink flex flex-col animate-fade-in">
+      {/* Top bar */}
+      <header className="h-14 shrink-0 border-b border-line flex items-center justify-between px-5">
+        <div className="flex items-center gap-2.5">
+          <span className="h-6 w-6 rounded-md bg-surface-2 flex items-center justify-center text-ink-muted"><Terminal size={14} /></span>
+          <h1 className="text-[15px] font-semibold tracking-tight">Settings</h1>
         </div>
+        <button onClick={onClose} className="btn btn-ghost h-8 px-2.5 text-ink-muted gap-1.5 text-[13px]">
+          <X size={16} /> Close
+        </button>
+      </header>
 
-        {/* Tabs */}
-        <div className="flex gap-1 px-4 pt-3 shrink-0">
+      {/* Body */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left nav */}
+        <nav className="w-60 shrink-0 border-r border-line p-3 overflow-y-auto hidden sm:block">
+          <div className="space-y-0.5">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-medium text-left transition-colors ${
+                  tab === t.id ? 'bg-accent-soft text-ink' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'
+                }`}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        {/* Mobile tab bar */}
+        <div className="sm:hidden absolute top-14 left-0 right-0 z-10 flex gap-1 overflow-x-auto border-b border-line bg-app px-3 py-2">
           {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
-                tab === t.id ? 'bg-surface-2 text-ink' : 'text-ink-muted hover:text-ink'
-              }`}
-            >
+            <button key={t.id} onClick={() => setTab(t.id)} className={`shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium ${tab === t.id ? 'bg-accent-soft text-ink' : 'text-ink-muted'}`}>
               {t.icon} {t.label}
             </button>
           ))}
         </div>
 
-        <div className="p-5 overflow-y-auto">
-          {tab === 'profile' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="h-12 w-12 rounded-full bg-accent-soft flex items-center justify-center text-[16px] font-semibold text-ink">{initial}</span>
-                <div className="min-w-0">
-                  <p className="text-[14px] font-medium text-ink truncate">{user?.name || 'Your account'}</p>
-                  <p className="text-[12px] text-ink-subtle truncate">{user?.email}</p>
-                </div>
-              </div>
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-ink-muted">Display name</span>
-                <input value={name} onChange={(e) => { setName(e.target.value); setSavedProfile(false); }} className="field" placeholder="Your name" />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-ink-muted">Email</span>
-                <input value={user?.email || ''} disabled className="field opacity-70 cursor-not-allowed" />
-              </label>
-              <div className="flex justify-end">
-                <button onClick={saveProfile} disabled={savingProfile || !name.trim()} className="btn btn-primary h-9 px-4">
-                  {savingProfile ? <Loader2 size={15} className="animate-spin" /> : savedProfile ? <><Check size={15} /> Saved</> : 'Save changes'}
-                </button>
-              </div>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto pt-14 sm:pt-0">
+          <div className="max-w-2xl mx-auto px-6 sm:px-10 py-9">
+            <div className="mb-7">
+              <h2 className="text-[20px] font-semibold tracking-tight">{active.title}</h2>
+              <p className="mt-1 text-[13px] text-ink-muted">{active.subtitle}</p>
             </div>
-          )}
 
-          {tab === 'organization' && (
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-ink-muted">Organization name</span>
-                <input value={orgName} onChange={(e) => { setOrgName(e.target.value); setSavedOrg(false); }} className="field" placeholder="e.g. Acme Inc." />
-                <span className="mt-1.5 block text-[11.5px] text-ink-subtle">Shown across your workspace.</span>
-              </label>
-              <div className="flex justify-end">
-                <button onClick={saveOrg} disabled={savingOrg} className="btn btn-primary h-9 px-4">
-                  {savingOrg ? <Loader2 size={15} className="animate-spin" /> : savedOrg ? <><Check size={15} /> Saved</> : 'Save'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {tab === 'members' && (
-            <div className="space-y-5">
-              <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Admin</p>
-                <div className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5">
-                  <span className="h-8 w-8 rounded-full bg-accent-soft flex items-center justify-center text-[12px] font-semibold text-ink">{initial}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-ink truncate">{user?.name || 'You'}</p>
-                    <p className="text-[11.5px] text-ink-subtle truncate">{user?.email}</p>
+            {tab === 'profile' && (
+              <div className="space-y-5">
+                <div className="flex items-center gap-3.5">
+                  <span className="h-14 w-14 rounded-full bg-accent-soft flex items-center justify-center text-[18px] font-semibold text-ink">{initial}</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-medium text-ink truncate">{user?.name || 'Your account'}</p>
+                    <p className="text-[12.5px] text-ink-subtle truncate">{user?.email}</p>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
-                    <Shield size={12} /> Owner
-                  </span>
                 </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">
-                  Invited testers {invites.length > 0 && <span className="text-ink-subtle">· {invites.length}</span>}
-                </p>
-                {loadingInvites ? (
-                  <div className="flex items-center gap-2 text-[12.5px] text-ink-muted py-2"><Loader2 size={14} className="animate-spin" /> Loading…</div>
-                ) : invites.length === 0 ? (
-                  <p className="text-[12.5px] text-ink-muted py-1">
-                    No testers invited yet. Open a beta-testing board → <span className="text-ink">Invite testers</span>.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {invites.map((inv) => (
-                      <div key={inv.id} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2">
-                        <span className="h-7 w-7 rounded-full bg-surface-2 flex items-center justify-center text-ink-subtle shrink-0"><Mail size={13} /></span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12.5px] font-medium text-ink truncate">{inv.email}</p>
-                          <p className="text-[11px] text-ink-subtle truncate">{inv.board_title}</p>
-                        </div>
-                        <StatusBadge status={inv.status} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {tab === 'developer' && (
-            <div className="space-y-5">
-              <p className="text-[12.5px] text-ink-muted leading-relaxed">
-                Connect Claude Code or Codex to Canflow over MCP. Create a token, add the Canflow MCP server to your agent, and it can pull issues from your beta boards and move cards as it fixes them.
-              </p>
-
-              <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Access tokens</p>
-                <div className="flex gap-2">
-                  <input value={newTokenName} onChange={(e) => setNewTokenName(e.target.value)} className="field" placeholder="Token name (e.g. My laptop)" />
-                  <button onClick={createToken} disabled={creatingToken} className="btn btn-primary h-9 px-3 shrink-0">
-                    {creatingToken ? <Loader2 size={15} className="animate-spin" /> : <><Plus size={15} /> New token</>}
+                <label className="block max-w-md">
+                  <span className="mb-1.5 block text-[12.5px] font-medium text-ink-muted">Display name</span>
+                  <input value={name} onChange={(e) => { setName(e.target.value); setSavedProfile(false); }} className="field" placeholder="Your name" />
+                </label>
+                <label className="block max-w-md">
+                  <span className="mb-1.5 block text-[12.5px] font-medium text-ink-muted">Email</span>
+                  <input value={user?.email || ''} disabled className="field opacity-70 cursor-not-allowed" />
+                </label>
+                <div className="pt-1">
+                  <button onClick={saveProfile} disabled={savingProfile || !name.trim()} className="btn btn-primary h-9 px-4">
+                    {savingProfile ? <Loader2 size={15} className="animate-spin" /> : savedProfile ? <><Check size={15} /> Saved</> : 'Save changes'}
                   </button>
                 </div>
+              </div>
+            )}
 
-                {createdToken && (
-                  <div className="mt-3 rounded-lg border border-line p-3" style={{ background: 'color-mix(in srgb, var(--success) 8%, transparent)' }}>
-                    <p className="text-[12px] font-medium text-ink mb-1.5">Copy your token now — it won't be shown again.</p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 truncate rounded-md bg-surface px-2.5 py-1.5 text-[11.5px] font-mono text-ink border border-line">{createdToken}</code>
-                      <button onClick={() => copy(createdToken, 'tok')} className="btn btn-outline h-8 px-2.5">{copied === 'tok' ? <Check size={14} /> : <Copy size={14} />}</button>
+            {tab === 'organization' && (
+              <div className="space-y-5">
+                <label className="block max-w-md">
+                  <span className="mb-1.5 block text-[12.5px] font-medium text-ink-muted">Organization name</span>
+                  <input value={orgName} onChange={(e) => { setOrgName(e.target.value); setSavedOrg(false); }} className="field" placeholder="e.g. Acme Inc." />
+                  <span className="mt-1.5 block text-[11.5px] text-ink-subtle">Shown across your workspace.</span>
+                </label>
+                <div className="pt-1">
+                  <button onClick={saveOrg} disabled={savingOrg} className="btn btn-primary h-9 px-4">
+                    {savingOrg ? <Loader2 size={15} className="animate-spin" /> : savedOrg ? <><Check size={15} /> Saved</> : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {tab === 'members' && (
+              <div className="space-y-6">
+                <div>
+                  <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Admin</p>
+                  <div className="flex items-center gap-3 card p-3">
+                    <span className="h-9 w-9 rounded-full bg-accent-soft flex items-center justify-center text-[13px] font-semibold text-ink">{initial}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13.5px] font-medium text-ink truncate">{user?.name || 'You'}</p>
+                      <p className="text-[12px] text-ink-subtle truncate">{user?.email}</p>
                     </div>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
+                      <Shield size={12} /> Owner
+                    </span>
                   </div>
-                )}
+                </div>
 
-                <div className="mt-2.5 space-y-1.5">
-                  {tokens.length === 0 ? (
-                    <p className="text-[12px] text-ink-subtle">No tokens yet.</p>
+                <div>
+                  <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">
+                    Invited testers {invites.length > 0 && <span>· {invites.length}</span>}
+                  </p>
+                  {loadingInvites ? (
+                    <div className="flex items-center gap-2 text-[12.5px] text-ink-muted py-2"><Loader2 size={14} className="animate-spin" /> Loading…</div>
+                  ) : invites.length === 0 ? (
+                    <p className="text-[12.5px] text-ink-muted">
+                      No testers invited yet. Open a beta-testing board → <span className="text-ink font-medium">Invite testers</span>.
+                    </p>
                   ) : (
-                    tokens.map((t) => (
-                      <div key={t.id} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2">
-                        <Key size={14} className="text-ink-subtle shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12.5px] font-medium text-ink truncate">{t.name || 'Token'}</p>
-                          <p className="text-[11px] text-ink-subtle truncate font-mono">
-                            {t.token_prefix}{t.last_used_at ? ' · used' : ' · never used'}
-                          </p>
+                    <div className="space-y-1.5">
+                      {invites.map((inv) => (
+                        <div key={inv.id} className="flex items-center gap-3 card p-2.5">
+                          <span className="h-8 w-8 rounded-full bg-surface-2 flex items-center justify-center text-ink-subtle shrink-0"><Mail size={14} /></span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-medium text-ink truncate">{inv.email}</p>
+                            <p className="text-[11.5px] text-ink-subtle truncate">{inv.board_title}</p>
+                          </div>
+                          <StatusBadge status={inv.status} />
                         </div>
-                        <button onClick={() => revokeToken(t.id)} className="btn btn-ghost h-7 w-7 p-0 text-danger" title="Revoke"><Trash2 size={14} /></button>
-                      </div>
-                    ))
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
+            )}
 
-              <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Connect your agent</p>
+            {tab === 'developer' && (
+              <div className="space-y-7">
+                <div>
+                  <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Access tokens</p>
+                  <div className="flex gap-2 max-w-lg">
+                    <input value={newTokenName} onChange={(e) => setNewTokenName(e.target.value)} className="field" placeholder="Token name (e.g. My laptop)" />
+                    <button onClick={createToken} disabled={creatingToken} className="btn btn-primary h-9 px-3 shrink-0">
+                      {creatingToken ? <Loader2 size={15} className="animate-spin" /> : <><Plus size={15} /> New token</>}
+                    </button>
+                  </div>
 
-                <div className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
-                  <ClaudeCodeLogo className="h-4 w-4" /> Claude Code
+                  {createdToken && (
+                    <div className="mt-3 max-w-lg rounded-xl border border-line p-3.5" style={{ background: 'color-mix(in srgb, var(--success) 8%, transparent)' }}>
+                      <p className="text-[12.5px] font-medium text-ink mb-2">Copy your token now — it won't be shown again.</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 truncate rounded-lg bg-surface px-3 py-2 text-[12px] font-mono text-ink border border-line">{createdToken}</code>
+                        <button onClick={() => copy(createdToken, 'tok')} className="btn btn-outline h-9 px-3">{copied === 'tok' ? <Check size={15} /> : <Copy size={15} />}</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-3 space-y-1.5 max-w-lg">
+                    {tokens.length === 0 ? (
+                      <p className="text-[12.5px] text-ink-subtle">No tokens yet.</p>
+                    ) : (
+                      tokens.map((t) => (
+                        <div key={t.id} className="flex items-center gap-3 card p-2.5">
+                          <span className="h-8 w-8 rounded-lg bg-surface-2 flex items-center justify-center text-ink-subtle shrink-0"><Key size={15} /></span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-medium text-ink truncate">{t.name || 'Token'}</p>
+                            <p className="text-[11.5px] text-ink-subtle truncate font-mono">
+                              {t.token_prefix} · {t.last_used_at ? 'used' : 'never used'}
+                            </p>
+                          </div>
+                          <button onClick={() => revokeToken(t.id)} className="btn btn-ghost h-8 w-8 p-0 text-danger" title="Revoke"><Trash2 size={15} /></button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-                <CodeBlock text={claudeCmd} onCopy={() => copy(claudeCmd, 'claude')} copied={copied === 'claude'} />
 
-                <div className="mt-3.5 mb-1.5 flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
-                  <CodexLogo className="h-4 w-4" /> Codex
-                  <span className="font-normal text-ink-muted">— add to <code className="font-mono text-[11.5px]">~/.codex/config.toml</code></span>
+                <div>
+                  <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Connect your agent</p>
+
+                  <div className="space-y-4 max-w-xl">
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 text-[13.5px] font-semibold text-ink">
+                        <ClaudeCodeLogo className="h-5 w-5" /> Claude Code
+                      </div>
+                      <CodeBlock text={claudeCmd} onCopy={() => copy(claudeCmd, 'claude')} copied={copied === 'claude'} />
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 text-[13.5px] font-semibold text-ink">
+                        <CodexLogo className="h-5 w-5" /> Codex
+                        <span className="font-normal text-[12.5px] text-ink-muted">— add to <code className="font-mono text-[11.5px]">~/.codex/config.toml</code></span>
+                      </div>
+                      <CodeBlock text={codexCfg} onCopy={() => copy(codexCfg, 'codex')} copied={copied === 'codex'} />
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-[11.5px] text-ink-subtle leading-relaxed max-w-xl">
+                    <code className="font-mono">canflow-mcp</code> is published on npm, so these commands run as-is. Create or paste a token above to fill in <code className="font-mono">CANFLOW_TOKEN</code>. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Identified Bugs' phase, fix them, and move each to Fixing then Verified."</span>
+                  </p>
                 </div>
-                <CodeBlock text={codexCfg} onCopy={() => copy(codexCfg, 'codex')} copied={copied === 'codex'} />
-
-                <p className="mt-2.5 text-[11px] text-ink-subtle leading-relaxed">
-                  <code className="font-mono">canflow-mcp</code> is published on npm, so these commands run as-is. Create or paste a token above to fill in <code className="font-mono">CANFLOW_TOKEN</code>.
-                </p>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -321,10 +357,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
 function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: () => void; copied: boolean }) {
   return (
-    <div className="relative rounded-lg border border-line bg-surface-2">
-      <pre className="overflow-x-auto p-3 pr-10 text-[11.5px] font-mono leading-relaxed text-ink whitespace-pre-wrap break-all">{text}</pre>
-      <button onClick={onCopy} className="absolute top-2 right-2 h-7 w-7 rounded-md flex items-center justify-center text-ink-subtle hover:bg-surface hover:text-ink" title="Copy">
-        {copied ? <Check size={14} /> : <Copy size={14} />}
+    <div className="relative rounded-xl border border-line bg-surface-2">
+      <pre className="overflow-x-auto p-3.5 pr-11 text-[12px] font-mono leading-relaxed text-ink whitespace-pre-wrap break-all">{text}</pre>
+      <button onClick={onCopy} className="absolute top-2.5 right-2.5 h-7 w-7 rounded-md flex items-center justify-center text-ink-subtle hover:bg-surface hover:text-ink transition-colors" title="Copy">
+        {copied ? <Check size={15} /> : <Copy size={15} />}
       </button>
     </div>
   );

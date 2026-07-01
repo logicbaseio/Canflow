@@ -12,6 +12,10 @@ export default {
           '-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'Inter',
           'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif',
         ],
+        mono: [
+          'IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo',
+          'Consolas', 'monospace',
+        ],
       },
       colors: {
         // Semantic tokens — driven by CSS variables (see index.css).
