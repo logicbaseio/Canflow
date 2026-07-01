@@ -1,12 +1,44 @@
 {
   "name": "canflow-mcp",
   "version": "1.0.0",
-  "description": "MCP server that lets Claude Code / Codex read and update Canflow issue cards.",
+  "description": "MCP server that lets Claude Code, Codex and other MCP clients read and update Canflow issue cards.",
   "type": "module",
   "bin": {
     "canflow-mcp": "./index.mjs"
   },
-  "files": ["index.mjs"],
+  "files": [
+    "index.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "canflow",
+    "claude-code",
+    "codex",
+    "ai-agent",
+    "issues",
+    "kanban",
+    "beta-testing"
+  ],
+  "homepage": "https://canflow.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/logicbaseio/Canflow.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/logicbaseio/Canflow/issues"
+  },
+  "author": "Canflow",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
     "zod": "^3.24.0"
