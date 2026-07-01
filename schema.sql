@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS beta_categories (
   updated_at  TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id     TEXT PRIMARY KEY,
+  org_name    TEXT,
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_columns_board ON columns(board_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_column ON tasks(column_id);
 CREATE INDEX IF NOT EXISTS idx_invitations_board ON invitations(board_id);

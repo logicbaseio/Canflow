@@ -351,11 +351,12 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
 
     if (RESEND_API_KEY) {
       try {
+        const from = process.env.RESEND_FROM || "Canflow <onboarding@resend.dev>";
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            from: "onboarding@resend.dev",
+            from,
             to: data.email,
             subject: `You're invited to beta test: ${board.title}`,
             html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">Beta Testing Invitation</h1><h2 style="color:#1f2937">${board.title}</h2>${columnName ? `<p style="color:#6b7280">Phase: <strong>${columnName}</strong></p>` : ""}<p style="color:#6b7280">Help us improve by reporting bugs and feedback.</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">Join Beta Testing</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
@@ -420,6 +421,42 @@ app.get("/beta-categories/:boardId", async (c) => {
   if (!(await ownsBoard(boardId, uid))) return c.json({ error: "Board not found" }, 404);
   const categories = await query("SELECT * FROM beta_categories WHERE board_id = $1 ORDER BY name", [boardId]);
   return c.json(categories);
+});
+
+/* ----------------------------- Settings + team (auth required) ----------------------------- */
+
+app.get("/settings", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const row = await one<{ org_name: string | null }>("SELECT org_name FROM user_settings WHERE user_id = $1", [uid]);
+  return c.json({ org_name: row?.org_name ?? null });
+});
+
+app.put("/settings", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const orgName = typeof body.org_name === "string" ? body.org_name.trim() : null;
+  await query(
+    `INSERT INTO user_settings (user_id, org_name, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (user_id) DO UPDATE SET org_name = EXCLUDED.org_name, updated_at = now()`,
+    [uid, orgName || null]
+  );
+  return c.json({ org_name: orgName || null });
+});
+
+/** All beta-tester invitations across the user's boards (for the Members view). */
+app.get("/invitations", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const rows = await query(
+    `SELECT i.id, i.email, i.status, i.token, i.created_at, i.board_id, b.title AS board_title
+     FROM invitations i JOIN boards b ON b.id = i.board_id
+     WHERE b.owner_id = $1
+     ORDER BY i.created_at DESC`,
+    [uid]
+  );
+  return c.json(rows);
 });
 
 /* ----------------------------- Invited access (open, token-scoped) ----------------------------- */

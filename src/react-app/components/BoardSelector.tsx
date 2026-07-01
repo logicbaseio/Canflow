@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, MoreHorizontal, Edit2, Trash2, Link2, Globe, Lock, LogOut } from 'lucide-react';
+import { Plus, MoreHorizontal, Edit2, Trash2, Link2, Globe, Lock, LogOut, Settings } from 'lucide-react';
 import { createBoard, deleteBoard, updateBoard } from '@/react-app/hooks/useApi';
 import { useAppContext } from '@/react-app/context/AppContext';
 import DarkModeToggle from '@/react-app/components/DarkModeToggle';
 import EditBoardModal from '@/react-app/components/EditBoardModal';
+import SettingsModal from '@/react-app/components/SettingsModal';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authClient, useSession } from '@/react-app/lib/auth';
 import { celebrate } from '@/react-app/lib/confetti';
@@ -37,6 +38,7 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
   const [newBoardType, setNewBoardType] = useState<CreateBoard['board_type']>('kanban');
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingBoard, setEditingBoard] = useState<Board | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleCreateBoard = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,8 +260,10 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
 
       {/* Footer */}
       <div className="border-t border-line">
-        <UserFooter boardCount={boards?.length ?? 0} />
+        <UserFooter boardCount={boards?.length ?? 0} onOpenSettings={() => setSettingsOpen(true)} />
       </div>
+
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <EditBoardModal
         board={editingBoard}
@@ -282,7 +286,7 @@ function Logo({ className }: { className?: string }) {
   );
 }
 
-function UserFooter({ boardCount }: { boardCount: number }) {
+function UserFooter({ boardCount, onOpenSettings }: { boardCount: number; onOpenSettings: () => void }) {
   const { data } = useSession();
   const user = data?.user;
   const label = user?.name || user?.email || 'Account';
@@ -295,7 +299,7 @@ function UserFooter({ boardCount }: { boardCount: number }) {
 
   return (
     <div className="px-2.5 py-2">
-      <div className="flex items-center gap-2 rounded-lg px-1.5 py-1">
+      <button onClick={onOpenSettings} className="w-full flex items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-surface-2 transition-colors" title="Settings">
         <span className="h-6 w-6 rounded-full bg-accent-soft flex items-center justify-center text-[11px] font-semibold text-ink shrink-0">
           {initial}
         </span>
@@ -305,15 +309,20 @@ function UserFooter({ boardCount }: { boardCount: number }) {
             <span className="block truncate text-[11px] text-ink-subtle">{user.email}</span>
           )}
         </span>
-        <button onClick={signOut} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle" title="Sign out">
-          <LogOut size={15} />
-        </button>
-      </div>
+      </button>
       <div className="mt-1 flex items-center justify-between px-1.5">
         <span className="text-[11px] text-ink-subtle">
           {boardCount} {boardCount === 1 ? 'board' : 'boards'}
         </span>
-        <DarkModeToggle />
+        <div className="flex items-center gap-0.5">
+          <button onClick={onOpenSettings} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle" title="Settings">
+            <Settings size={15} />
+          </button>
+          <DarkModeToggle />
+          <button onClick={signOut} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle" title="Sign out">
+            <LogOut size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );
