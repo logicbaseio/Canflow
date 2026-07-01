@@ -1,0 +1,14 @@
+{
+  "name": "canflow-mcp",
+  "version": "1.0.0",
+  "description": "MCP server that lets Claude Code / Codex read and update Canflow issue cards.",
+  "type": "module",
+  "bin": {
+    "canflow-mcp": "./index.mjs"
+  },
+  "files": ["index.mjs"],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "zod": "^3.24.0"
+  }
+}

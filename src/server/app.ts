@@ -32,12 +32,30 @@ const JWKS_URL =
   "https://ep-soft-brook-atvks9ki.neonauth.c-9.us-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json";
 const jwks = createRemoteJWKSet(new URL(JWKS_URL));
 
-/** Verify the Neon Auth JWT from the Authorization header; returns the user id (sub) or null. */
+async function sha256hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Resolve the current user id from the Authorization header. Accepts either a
+ * Neon Auth JWT (browser) or a Canflow API token `cf_…` (MCP server / agents).
+ */
 async function getUserId(c: Context): Promise<string | null> {
   const header = c.req.header("Authorization");
   if (!header?.startsWith("Bearer ")) return null;
+  const token = header.slice(7);
+
+  if (token.startsWith("cf_")) {
+    const hash = await sha256hex(token);
+    const row = await one<{ user_id: string }>("SELECT user_id FROM api_tokens WHERE token_hash = $1", [hash]);
+    if (!row) return null;
+    query("UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1", [hash]).catch(() => {});
+    return row.user_id;
+  }
+
   try {
-    const { payload } = await jwtVerify(header.slice(7), jwks);
+    const { payload } = await jwtVerify(token, jwks);
     return typeof payload.sub === "string" ? payload.sub : null;
   } catch {
     return null;
@@ -457,6 +475,107 @@ app.get("/invitations", async (c) => {
     [uid]
   );
   return c.json(rows);
+});
+
+/* ----------------------------- API tokens (for MCP / agents) ----------------------------- */
+
+app.get("/tokens", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const rows = await query(
+    "SELECT id, name, token_prefix, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC",
+    [uid]
+  );
+  return c.json(rows);
+});
+
+app.post("/tokens", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const name = (typeof body.name === "string" && body.name.trim()) || "Token";
+  const rand = [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const token = `cf_${rand}`;
+  const hash = await sha256hex(token);
+  const prefix = `${token.slice(0, 11)}…`;
+  const row = await one(
+    "INSERT INTO api_tokens (user_id, name, token_hash, token_prefix) VALUES ($1, $2, $3, $4) RETURNING id, name, token_prefix, created_at",
+    [uid, name, hash, prefix]
+  );
+  // Plaintext token is returned exactly once, here.
+  return c.json({ ...row, token }, 201);
+});
+
+app.delete("/tokens/:id", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  await query("DELETE FROM api_tokens WHERE id = $1 AND user_id = $2", [parseInt(c.req.param("id")), uid]);
+  return c.json({ success: true });
+});
+
+/* ----------------------------- Issues API (agent-facing) ----------------------------- */
+
+// List bug/issue cards from the user's beta-testing boards. Optional ?phase= and ?board_id=.
+app.get("/issues", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const phase = c.req.query("phase");
+  const boardId = c.req.query("board_id");
+  const params: unknown[] = [uid];
+  let sqlText = `
+    SELECT t.id, t.title, t.description, t.priority, t.intensity, t.category, t.image_url,
+           b.id AS board_id, b.title AS board_title, col.id AS column_id, col.title AS phase
+    FROM tasks t
+    JOIN columns col ON col.id = t.column_id
+    JOIN boards b ON b.id = col.board_id
+    WHERE b.owner_id = $1 AND b.board_type = 'beta-testing'`;
+  if (boardId) { params.push(parseInt(boardId)); sqlText += ` AND b.id = $${params.length}`; }
+  if (phase) { params.push(phase); sqlText += ` AND lower(col.title) = lower($${params.length})`; }
+  sqlText += ` ORDER BY b.id, col.position, t.position`;
+  const rows = await query(sqlText, params);
+  return c.json(rows);
+});
+
+app.get("/issues/:id", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  const row = await one<{ board_id: number }>(
+    `SELECT t.id, t.title, t.description, t.priority, t.intensity, t.category, t.image_url,
+            b.id AS board_id, b.title AS board_title, col.id AS column_id, col.title AS phase
+     FROM tasks t
+     JOIN columns col ON col.id = t.column_id
+     JOIN boards b ON b.id = col.board_id
+     WHERE t.id = $1 AND b.owner_id = $2`,
+    [id, uid]
+  );
+  if (!row) return c.json({ error: "Issue not found" }, 404);
+  const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [row.board_id]);
+  return c.json({ ...row, available_phases: phases.map((p) => p.title) });
+});
+
+app.post("/issues/:id/move", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  const body = await c.req.json().catch(() => ({}));
+  const phase = typeof body.phase === "string" ? body.phase.trim() : "";
+  if (!phase) return c.json({ error: "phase is required" }, 400);
+  const t = await one<{ board_id: number }>(
+    `SELECT col.board_id FROM tasks t
+     JOIN columns col ON col.id = t.column_id
+     JOIN boards b ON b.id = col.board_id
+     WHERE t.id = $1 AND b.owner_id = $2`,
+    [id, uid]
+  );
+  if (!t) return c.json({ error: "Issue not found" }, 404);
+  const target = await one<{ id: number }>("SELECT id FROM columns WHERE board_id = $1 AND lower(title) = lower($2)", [t.board_id, phase]);
+  if (!target) {
+    const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [t.board_id]);
+    return c.json({ error: `Phase "${phase}" not found`, available_phases: phases.map((p) => p.title) }, 400);
+  }
+  const updated = await one("UPDATE tasks SET column_id = $1, updated_at = now() WHERE id = $2 RETURNING *", [target.id, id]);
+  return c.json(updated);
 });
 
 /* ----------------------------- Invited access (open, token-scoped) ----------------------------- */

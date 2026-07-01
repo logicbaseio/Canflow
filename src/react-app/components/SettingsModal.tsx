@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check } from 'lucide-react';
+import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key } from 'lucide-react';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
 
 interface SettingsModalProps {
@@ -7,7 +7,7 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type Tab = 'profile' | 'organization' | 'members';
+type Tab = 'profile' | 'organization' | 'members' | 'developer';
 
 interface InviteRow {
   id: number;
@@ -17,10 +17,19 @@ interface InviteRow {
   created_at: string;
 }
 
+interface TokenRow {
+  id: number;
+  name: string;
+  token_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Profile', icon: <UserIcon size={15} /> },
   { id: 'organization', label: 'Organization', icon: <Building2 size={15} /> },
   { id: 'members', label: 'Members', icon: <Users size={15} /> },
+  { id: 'developer', label: 'Developer', icon: <Terminal size={15} /> },
 ];
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
@@ -35,6 +44,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [savedOrg, setSavedOrg] = useState(false);
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [loadingInvites, setLoadingInvites] = useState(false);
+  const [tokens, setTokens] = useState<TokenRow[]>([]);
+  const [newTokenName, setNewTokenName] = useState('');
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [creatingToken, setCreatingToken] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -42,6 +56,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setName(user?.name || '');
     setSavedProfile(false);
     setSavedOrg(false);
+    setCreatedToken(null);
     authedFetch('/api/settings').then((r) => r.json()).then((s) => setOrgName(s?.org_name || '')).catch(() => {});
     setLoadingInvites(true);
     authedFetch('/api/invitations')
@@ -49,7 +64,43 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .then((d) => setInvites(Array.isArray(d) ? d : []))
       .catch(() => {})
       .finally(() => setLoadingInvites(false));
+    authedFetch('/api/tokens').then((r) => r.json()).then((d) => setTokens(Array.isArray(d) ? d : [])).catch(() => {});
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const createToken = async () => {
+    setCreatingToken(true);
+    try {
+      const res = await authedFetch('/api/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTokenName.trim() || 'Agent token' }),
+      }).then((r) => r.json());
+      if (res.token) {
+        setCreatedToken(res.token);
+        setNewTokenName('');
+        setTokens((t) => [{ id: res.id, name: res.name, token_prefix: res.token_prefix, created_at: res.created_at, last_used_at: null }, ...t]);
+      }
+    } catch (e) {
+      console.error('Failed to create token:', e);
+    } finally {
+      setCreatingToken(false);
+    }
+  };
+
+  const revokeToken = async (id: number) => {
+    try {
+      await authedFetch(`/api/tokens/${id}`, { method: 'DELETE' });
+      setTokens((t) => t.filter((x) => x.id !== id));
+    } catch (e) {
+      console.error('Failed to revoke token:', e);
+    }
+  };
+
+  const copy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied((k) => (k === key ? null : k)), 1500);
+  };
 
   const saveProfile = async () => {
     setSavingProfile(true);
@@ -84,6 +135,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   if (!isOpen) return null;
 
   const initial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
+  const tok = createdToken || '<YOUR_TOKEN>';
+  const claudeCmd = `claude mcp add canflow --env CANFLOW_TOKEN=${tok} -- npx -y canflow-mcp`;
+  const codexCfg = `[mcp_servers.canflow]\ncommand = "npx"\nargs = ["-y", "canflow-mcp"]\nenv = { CANFLOW_TOKEN = "${tok}" }`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'var(--overlay)' }} onMouseDown={onClose}>
@@ -192,8 +246,77 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </div>
             </div>
           )}
+
+          {tab === 'developer' && (
+            <div className="space-y-5">
+              <p className="text-[12.5px] text-ink-muted leading-relaxed">
+                Connect Claude Code or Codex to Canflow over MCP. Create a token, add the Canflow MCP server to your agent, and it can pull issues from your beta boards and move cards as it fixes them.
+              </p>
+
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Access tokens</p>
+                <div className="flex gap-2">
+                  <input value={newTokenName} onChange={(e) => setNewTokenName(e.target.value)} className="field" placeholder="Token name (e.g. My laptop)" />
+                  <button onClick={createToken} disabled={creatingToken} className="btn btn-primary h-9 px-3 shrink-0">
+                    {creatingToken ? <Loader2 size={15} className="animate-spin" /> : <><Plus size={15} /> New token</>}
+                  </button>
+                </div>
+
+                {createdToken && (
+                  <div className="mt-3 rounded-lg border border-line p-3" style={{ background: 'color-mix(in srgb, var(--success) 8%, transparent)' }}>
+                    <p className="text-[12px] font-medium text-ink mb-1.5">Copy your token now — it won't be shown again.</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 truncate rounded-md bg-surface px-2.5 py-1.5 text-[11.5px] font-mono text-ink border border-line">{createdToken}</code>
+                      <button onClick={() => copy(createdToken, 'tok')} className="btn btn-outline h-8 px-2.5">{copied === 'tok' ? <Check size={14} /> : <Copy size={14} />}</button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-2.5 space-y-1.5">
+                  {tokens.length === 0 ? (
+                    <p className="text-[12px] text-ink-subtle">No tokens yet.</p>
+                  ) : (
+                    tokens.map((t) => (
+                      <div key={t.id} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2">
+                        <Key size={14} className="text-ink-subtle shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12.5px] font-medium text-ink truncate">{t.name || 'Token'}</p>
+                          <p className="text-[11px] text-ink-subtle truncate font-mono">
+                            {t.token_prefix}{t.last_used_at ? ' · used' : ' · never used'}
+                          </p>
+                        </div>
+                        <button onClick={() => revokeToken(t.id)} className="btn btn-ghost h-7 w-7 p-0 text-danger" title="Revoke"><Trash2 size={14} /></button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Connect your agent</p>
+                <p className="mb-1.5 text-[12px] text-ink-muted">Claude Code</p>
+                <CodeBlock text={claudeCmd} onCopy={() => copy(claudeCmd, 'claude')} copied={copied === 'claude'} />
+                <p className="mt-3 mb-1.5 text-[12px] text-ink-muted">Codex — add to <code className="font-mono text-[11.5px]">~/.codex/config.toml</code></p>
+                <CodeBlock text={codexCfg} onCopy={() => copy(codexCfg, 'codex')} copied={copied === 'codex'} />
+                <p className="mt-2.5 text-[11px] text-ink-subtle leading-relaxed">
+                  The server lives in the repo's <code className="font-mono">mcp/</code> folder. Publish it to npm as <code className="font-mono">canflow-mcp</code>, or replace the command with <code className="font-mono">node /path/to/mcp/index.mjs</code>.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: () => void; copied: boolean }) {
+  return (
+    <div className="relative rounded-lg border border-line bg-surface-2">
+      <pre className="overflow-x-auto p-3 pr-10 text-[11.5px] font-mono leading-relaxed text-ink whitespace-pre-wrap break-all">{text}</pre>
+      <button onClick={onCopy} className="absolute top-2 right-2 h-7 w-7 rounded-md flex items-center justify-center text-ink-subtle hover:bg-surface hover:text-ink" title="Copy">
+        {copied ? <Check size={14} /> : <Copy size={14} />}
+      </button>
     </div>
   );
 }

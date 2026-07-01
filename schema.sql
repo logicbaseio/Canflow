@@ -72,6 +72,17 @@ CREATE TABLE IF NOT EXISTS user_settings (
   updated_at  TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id            SERIAL PRIMARY KEY,
+  user_id       TEXT NOT NULL,
+  name          TEXT,
+  token_hash    TEXT UNIQUE NOT NULL,
+  token_prefix  TEXT,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  last_used_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
+
 CREATE INDEX IF NOT EXISTS idx_columns_board ON columns(board_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_column ON tasks(column_id);
 CREATE INDEX IF NOT EXISTS idx_invitations_board ON invitations(board_id);
