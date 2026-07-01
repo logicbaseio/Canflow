@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key } from 'lucide-react';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
+import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -294,12 +295,20 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
               <div>
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Connect your agent</p>
-                <p className="mb-1.5 text-[12px] text-ink-muted">Claude Code</p>
+
+                <div className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
+                  <ClaudeCodeLogo className="h-4 w-4" /> Claude Code
+                </div>
                 <CodeBlock text={claudeCmd} onCopy={() => copy(claudeCmd, 'claude')} copied={copied === 'claude'} />
-                <p className="mt-3 mb-1.5 text-[12px] text-ink-muted">Codex — add to <code className="font-mono text-[11.5px]">~/.codex/config.toml</code></p>
+
+                <div className="mt-3.5 mb-1.5 flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
+                  <CodexLogo className="h-4 w-4" /> Codex
+                  <span className="font-normal text-ink-muted">— add to <code className="font-mono text-[11.5px]">~/.codex/config.toml</code></span>
+                </div>
                 <CodeBlock text={codexCfg} onCopy={() => copy(codexCfg, 'codex')} copied={copied === 'codex'} />
+
                 <p className="mt-2.5 text-[11px] text-ink-subtle leading-relaxed">
-                  The server lives in the repo's <code className="font-mono">mcp/</code> folder. Publish it to npm as <code className="font-mono">canflow-mcp</code>, or replace the command with <code className="font-mono">node /path/to/mcp/index.mjs</code>.
+                  <code className="font-mono">canflow-mcp</code> is published on npm, so these commands run as-is. Create or paste a token above to fill in <code className="font-mono">CANFLOW_TOKEN</code>.
                 </p>
               </div>
             </div>
