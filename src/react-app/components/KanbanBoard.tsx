@@ -31,6 +31,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
+  const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -86,14 +87,17 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
   };
 
   const handleTaskSave = async (data: CreateTask | UpdateTask) => {
+    const createInColumn = editingTask ? null : newTaskColumnId;
     try {
       if (editingTask) {
         await updateTask(editingTask.id, data as UpdateTask);
-      } else if (newTaskColumnId) {
-        await createTask({ ...(data as CreateTask), column_id: newTaskColumnId, position: 0 });
+      } else if (createInColumn) {
+        setPendingColumnId(createInColumn);
+        await createTask({ ...(data as CreateTask), column_id: createInColumn, position: 0 });
       }
-      refetch();
+      await refetch();
     } catch (e) { console.error('Failed to save task:', e); }
+    finally { setPendingColumnId(null); }
   };
 
   const handleAddColumn = async () => {
@@ -146,6 +150,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
               <KanbanColumn
                 key={column.id}
                 column={column}
+                pending={pendingColumnId === column.id}
                 onAddTask={handleAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}

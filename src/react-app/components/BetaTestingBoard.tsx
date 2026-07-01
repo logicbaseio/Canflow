@@ -35,6 +35,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
+  const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
   const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
@@ -136,20 +137,19 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   };
 
   const handleTaskSave = async (data: CreateTask | UpdateTask) => {
+    const createInColumn = editingTask ? null : newTaskColumnId;
     try {
       if (editingTask) {
         await updateTask(editingTask.id, data as UpdateTask);
-      } else if (newTaskColumnId) {
-        const createData = data as CreateTask;
-        await createTask({
-          ...createData,
-          column_id: newTaskColumnId,
-          position: 0,
-        });
+      } else if (createInColumn) {
+        setPendingColumnId(createInColumn);
+        await createTask({ ...(data as CreateTask), column_id: createInColumn, position: 0 });
       }
-      refetch();
+      await refetch();
     } catch (error) {
       console.error('Failed to save task:', error);
+    } finally {
+      setPendingColumnId(null);
     }
   };
 
@@ -295,6 +295,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
               <BetaColumn
                 key={column.id}
                 column={column}
+                pending={pendingColumnId === column.id}
                 onAddTask={handleAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}

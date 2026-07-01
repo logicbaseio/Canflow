@@ -3,10 +3,12 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus, Mail, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import BetaTaskCard from './BetaTaskCard';
+import PendingCard from './ui/PendingCard';
 import type { Column, Task } from '@/shared/types';
 
 interface BetaColumnProps {
   column: Column & { tasks: Task[] };
+  pending?: boolean;
   onAddTask: (columnId: number) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: number) => void;
@@ -17,6 +19,7 @@ interface BetaColumnProps {
 
 export default function BetaColumn({
   column,
+  pending,
   onAddTask,
   onEditTask,
   onDeleteTask,
@@ -75,6 +78,8 @@ export default function BetaColumn({
             <BetaTaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} />
           ))}
         </SortableContext>
+
+        {pending && <PendingCard />}
 
         <button
           onClick={() => onAddTask(column.id)}

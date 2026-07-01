@@ -6,6 +6,7 @@ import DarkModeToggle from '@/react-app/components/DarkModeToggle';
 import EditBoardModal from '@/react-app/components/EditBoardModal';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authClient, useSession } from '@/react-app/lib/auth';
+import { celebrate } from '@/react-app/lib/confetti';
 import type { CreateBoard, Board, UpdateBoard } from '@/shared/types';
 
 interface BoardSelectorProps {
@@ -52,6 +53,7 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
       setNewBoardType('kanban');
       setShowCreateForm(false);
       onBoardSelect(newBoard.id);
+      celebrate();
       refetchBoards();
     } catch (error) {
       console.error('Failed to create board:', error);

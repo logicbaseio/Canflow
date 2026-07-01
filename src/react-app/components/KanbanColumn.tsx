@@ -3,10 +3,12 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import TaskCard from './TaskCard';
+import PendingCard from './ui/PendingCard';
 import type { Column, Task } from '@/shared/types';
 
 interface KanbanColumnProps {
   column: Column & { tasks: Task[] };
+  pending?: boolean;
   onAddTask: (columnId: number) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: number) => void;
@@ -16,6 +18,7 @@ interface KanbanColumnProps {
 
 export default function KanbanColumn({
   column,
+  pending,
   onAddTask,
   onEditTask,
   onDeleteTask,
@@ -71,6 +74,8 @@ export default function KanbanColumn({
             <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} />
           ))}
         </SortableContext>
+
+        {pending && <PendingCard />}
 
         <button
           onClick={() => onAddTask(column.id)}

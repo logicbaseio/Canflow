@@ -3,6 +3,7 @@ import { Plus, Share2, Globe, Eye, Copy, ArrowUp, MoreHorizontal, Edit2, Trash2 
 import TaskModal from './TaskModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
+import PendingCard from '@/react-app/components/ui/PendingCard';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { useBoard, createTask, updateTask, createColumn, updateColumn, deleteColumn, updateBoard } from '@/react-app/hooks/useApi';
 import type { Task, Column, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
@@ -24,6 +25,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
+  const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
   const [showPublicMenu, setShowPublicMenu] = useState(false);
   const [columnMenu, setColumnMenu] = useState<number | null>(null);
 
@@ -40,15 +42,19 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   };
 
   const handleTaskSave = async (data: CreateTask | UpdateTask) => {
+    const createInColumn = editingTask ? null : newTaskColumnId;
     try {
       if (editingTask) {
         await updateTask(editingTask.id, data as UpdateTask);
-      } else if (newTaskColumnId) {
-        await createTask({ ...(data as CreateTask), column_id: newTaskColumnId, position: 0 });
+      } else if (createInColumn) {
+        setPendingColumnId(createInColumn);
+        await createTask({ ...(data as CreateTask), column_id: createInColumn, position: 0 });
       }
-      refetch();
+      await refetch();
     } catch (error) {
       console.error('Failed to save task:', error);
+    } finally {
+      setPendingColumnId(null);
     }
   };
 
@@ -255,6 +261,8 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
                     </div>
                   );
                 })}
+
+                {pendingColumnId === column.id && <PendingCard />}
 
                 <button
                   onClick={() => handleAddTask(column.id)}

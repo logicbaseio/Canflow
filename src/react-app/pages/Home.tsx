@@ -6,6 +6,7 @@ import RoadmapBoard from '@/react-app/components/RoadmapBoard';
 import BetaTestingBoard from '@/react-app/components/BetaTestingBoard';
 import { useAppContext } from '@/react-app/context/AppContext';
 import { useBoards, createBoard } from '@/react-app/hooks/useApi';
+import { celebrate } from '@/react-app/lib/confetti';
 import type { CreateBoard } from '@/shared/types';
 
 const QUICK_TYPES: { type: CreateBoard['board_type']; label: string }[] = [
@@ -42,6 +43,7 @@ export default function Home() {
       // Add to context first so the board view can render immediately (no flash).
       dispatch({ type: 'ADD_BOARD', payload: board });
       dispatch({ type: 'SET_SELECTED_BOARD_ID', payload: board.id });
+      celebrate();
       refetchBoards();
     } catch (e) {
       console.error('Failed to create board:', e);
