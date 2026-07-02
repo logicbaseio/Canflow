@@ -12,17 +12,17 @@ interface EditBoardModalProps {
 const SWATCHES = ['#1d1d1f', '#2f6feb', '#2f9e6f', '#c98a1b', '#d23f3f', '#8b5cf6', '#0ea5a3', '#e2547d'];
 
 export default function EditBoardModal({ board, isOpen, onClose, onSave }: EditBoardModalProps) {
-  const [formData, setFormData] = useState({ title: '', description: '', color: '#1d1d1f' });
+  const [formData, setFormData] = useState({ title: '', description: '', color: '#1d1d1f', github_repo: '' });
 
   useEffect(() => {
     if (board) {
-      setFormData({ title: board.title, description: board.description || '', color: board.color || '#1d1d1f' });
+      setFormData({ title: board.title, description: board.description || '', color: board.color || '#1d1d1f', github_repo: board.github_repo || '' });
     }
   }, [board, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ title: formData.title, description: formData.description || undefined, color: formData.color });
+    onSave({ title: formData.title, description: formData.description || undefined, color: formData.color, github_repo: formData.github_repo.trim() || null });
     onClose();
   };
 
@@ -82,6 +82,18 @@ export default function EditBoardModal({ board, isOpen, onClose, onSave }: EditB
               ))}
             </div>
           </div>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] font-medium text-ink-muted">GitHub repo <span className="text-ink-subtle font-normal">(optional)</span></span>
+            <input
+              type="text"
+              value={formData.github_repo}
+              onChange={(e) => setFormData({ ...formData, github_repo: e.target.value })}
+              className="field font-mono text-[12.5px]"
+              placeholder="owner/repo"
+            />
+            <span className="mt-1.5 block text-[11px] text-ink-subtle">Lets you open GitHub issues from cards. Connect GitHub in Settings → Developer first.</span>
+          </label>
 
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn btn-outline flex-1 h-9">Cancel</button>

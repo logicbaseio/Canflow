@@ -180,7 +180,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
         onSave={handleTaskSave}
       />
 
-      <FixWithModal task={fixingTask} boardTitle={board.title} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
+      <FixWithModal task={fixingTask} boardTitle={board.title} githubRepo={board.github_repo} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key, RefreshCw } from 'lucide-react';
+import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key, RefreshCw, Github } from 'lucide-react';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 
@@ -51,6 +51,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [creatingToken, setCreatingToken] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [githubToken, setGithubToken] = useState('');
+  const [savingGithub, setSavingGithub] = useState(false);
+  const [githubError, setGithubError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -67,7 +71,37 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .catch(() => {})
       .finally(() => setLoadingInvites(false));
     authedFetch('/api/tokens').then((r) => r.json()).then((d) => setTokens(Array.isArray(d) ? d : [])).catch(() => {});
+    setGithubToken('');
+    setGithubError(null);
+    authedFetch('/api/github').then((r) => r.json()).then((d) => setGithubConnected(!!d?.connected)).catch(() => {});
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const connectGithub = async () => {
+    setSavingGithub(true);
+    setGithubError(null);
+    try {
+      const res = await authedFetch('/api/github', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken.trim() }),
+      }).then((r) => r.json());
+      if (res.error) setGithubError(res.error);
+      else { setGithubConnected(!!res.connected); setGithubToken(''); }
+    } catch {
+      setGithubError('Failed to connect');
+    } finally {
+      setSavingGithub(false);
+    }
+  };
+
+  const disconnectGithub = async () => {
+    try {
+      await authedFetch('/api/github', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: '' }) });
+      setGithubConnected(false);
+    } catch (e) {
+      console.error('Failed to disconnect GitHub:', e);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -378,6 +412,33 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <p className="mt-3.5 text-[11.5px] text-ink-subtle leading-relaxed">
                     <code className="font-mono">canflow-mcp</code> is published on npm. Create a token above and it's filled into these commands automatically — just copy and run. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Identified Bugs' phase, fix them, and move each to Fixing then Verified."</span>
                   </p>
+                </div>
+
+                <div>
+                  <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">GitHub</p>
+                  {githubConnected ? (
+                    <div className="flex items-center gap-3 card p-3 max-w-lg">
+                      <Github size={18} className="text-ink-muted shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-medium text-ink">Connected</p>
+                        <p className="text-[11.5px] text-ink-subtle">Set a repo on a board (its Edit menu) to open GitHub issues from cards.</p>
+                      </div>
+                      <button onClick={disconnectGithub} className="btn btn-ghost h-8 px-3 text-[12.5px] text-danger shrink-0">Disconnect</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-2 max-w-lg">
+                        <input type="password" value={githubToken} onChange={(e) => setGithubToken(e.target.value)} className="field font-mono text-[12.5px]" placeholder="GitHub personal access token" />
+                        <button onClick={connectGithub} disabled={savingGithub || !githubToken.trim()} className="btn btn-primary h-9 px-3 shrink-0">
+                          {savingGithub ? <Loader2 size={15} className="animate-spin" /> : 'Connect'}
+                        </button>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-ink-subtle leading-relaxed">
+                        Create a token at <span className="font-mono">github.com/settings/tokens</span> with <span className="font-mono">repo</span> scope. Then a card's <span className="text-ink">Fix with agent</span> menu can open a GitHub issue, and PRs sync the card's phase.
+                      </p>
+                      {githubError && <p className="mt-1.5 text-[12px] text-danger">{githubError}</p>}
+                    </>
+                  )}
                 </div>
               </div>
             )}

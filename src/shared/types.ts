@@ -11,6 +11,7 @@ export const BoardSchema = z.object({
   is_public: z.boolean().default(false),
   public_theme: z.string().default('auto'),
   invite_mode: z.string().default('none'),
+  github_repo: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -30,6 +31,7 @@ export const UpdateBoardSchema = z.object({
   is_public: z.boolean().optional(),
   public_theme: z.enum(['auto', 'light', 'dark']).optional(),
   invite_mode: z.enum(['none', 'email']).optional(),
+  github_repo: z.string().nullable().optional(),
 });
 
 // Column schemas
@@ -69,6 +71,8 @@ export const TaskSchema = z.object({
   intensity: z.number().default(0),
   category: z.string().nullable(),
   image_url: z.string().nullable(),
+  github_issue_number: z.number().nullable().optional(),
+  github_url: z.string().nullable().optional(),
   upvotes: z.number().default(0),
   downvotes: z.number().default(0),
   created_at: z.string(),

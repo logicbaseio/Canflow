@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS boards (
   is_public     BOOLEAN DEFAULT FALSE,
   public_theme  TEXT DEFAULT 'auto',
   invite_mode   TEXT DEFAULT 'none',
+  github_repo   TEXT,          -- "owner/repo" for the GitHub bridge
   owner_id      TEXT,          -- neon_auth.user.id of the board owner (null = legacy/shared)
   created_at    TIMESTAMPTZ DEFAULT now(),
   updated_at    TIMESTAMPTZ DEFAULT now()
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   intensity   INTEGER DEFAULT 0,
   category    TEXT,
   image_url   TEXT,
+  github_issue_number INTEGER,
+  github_url  TEXT,
   upvotes     INTEGER DEFAULT 0,
   downvotes   INTEGER DEFAULT 0,
   created_at  TIMESTAMPTZ DEFAULT now(),
@@ -82,6 +85,8 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   created_at    TIMESTAMPTZ DEFAULT now(),
   last_used_at  TIMESTAMPTZ
 );
+
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS github_token TEXT;
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_columns_board ON columns(board_id);

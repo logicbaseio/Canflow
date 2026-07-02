@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { X, Copy, Check } from 'lucide-react';
+import { X, Copy, Check, Github, ExternalLink, Loader2 } from 'lucide-react';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
+import { authedFetch } from '@/react-app/lib/auth';
 import type { Task } from '@/shared/types';
 
 interface FixWithModalProps {
   task: Task | null;
   boardTitle?: string;
+  githubRepo?: string | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -32,13 +34,19 @@ function shArg(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-export default function FixWithModal({ task, boardTitle, isOpen, onClose }: FixWithModalProps) {
+export default function FixWithModal({ task, boardTitle, githubRepo, isOpen, onClose }: FixWithModalProps) {
   const [prompt, setPrompt] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  const [ghState, setGhState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [ghUrl, setGhUrl] = useState<string | null>(null);
+  const [ghError, setGhError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && task) setPrompt(buildPrompt(task, boardTitle));
     setCopied(null);
+    setGhState(task?.github_url ? 'done' : 'idle');
+    setGhUrl(task?.github_url ?? null);
+    setGhError(null);
   }, [isOpen, task, boardTitle]);
 
   useEffect(() => {
@@ -54,6 +62,20 @@ export default function FixWithModal({ task, boardTitle, isOpen, onClose }: FixW
     navigator.clipboard.writeText(text);
     setCopied(key);
     setTimeout(() => setCopied((k) => (k === key ? null : k)), 1600);
+  };
+
+  const createGithubIssue = async () => {
+    if (!task) return;
+    setGhState('loading');
+    setGhError(null);
+    try {
+      const res = await authedFetch(`/api/issues/${task.id}/github`, { method: 'POST' }).then((r) => r.json());
+      if (res.url) { setGhUrl(res.url); setGhState('done'); }
+      else { setGhError(res.error || 'Failed to create issue'); setGhState('error'); }
+    } catch {
+      setGhError('Failed to create issue');
+      setGhState('error');
+    }
   };
 
   const claudeCmd = `claude -p ${shArg(prompt)}`;
@@ -94,6 +116,25 @@ export default function FixWithModal({ task, boardTitle, isOpen, onClose }: FixW
               </button>
             </div>
           </div>
+
+          {githubRepo && (
+            <div className="border-t border-line pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-ink flex items-center gap-1.5"><Github size={14} /> GitHub</p>
+                  <p className="text-[11.5px] text-ink-subtle truncate">Open an issue in <span className="font-mono">{githubRepo}</span> for your agent's GitHub App.</p>
+                </div>
+                {ghState === 'done' && ghUrl ? (
+                  <a href={ghUrl} target="_blank" rel="noreferrer" className="btn btn-outline h-8 px-3 gap-1.5 text-[12.5px] shrink-0"><ExternalLink size={14} /> View issue</a>
+                ) : (
+                  <button onClick={createGithubIssue} disabled={ghState === 'loading'} className="btn btn-outline h-8 px-3 gap-1.5 text-[12.5px] shrink-0">
+                    {ghState === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Github size={14} />} Create issue
+                  </button>
+                )}
+              </div>
+              {ghError && <p className="mt-1.5 text-[12px] text-danger">{ghError}</p>}
+            </div>
+          )}
 
           <p className="text-[11.5px] text-ink-subtle leading-relaxed">
             The Claude Code / Codex buttons copy a ready-to-run <code className="font-mono">-p</code> / <code className="font-mono">exec</code> command. Or, if you've connected the Canflow MCP (<span className="text-ink">Settings → Developer</span>), just tell your agent: <span className="italic">"Fix Canflow issue #{task.id}"</span> and it'll pull the details and update the card itself.

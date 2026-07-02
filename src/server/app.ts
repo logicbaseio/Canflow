@@ -169,6 +169,7 @@ app.put("/boards/:id", zValidator("json", UpdateBoardSchema), async (c) => {
   set("is_public", data.is_public);
   set("public_theme", data.public_theme);
   set("invite_mode", data.invite_mode);
+  set("github_repo", data.github_repo);
 
   if (updates.length > 0) {
     updates.push(`updated_at = now()`);
@@ -575,6 +576,105 @@ app.post("/issues/:id/move", async (c) => {
   }
   const updated = await one("UPDATE tasks SET column_id = $1, updated_at = now() WHERE id = $2 RETURNING *", [target.id, id]);
   return c.json(updated);
+});
+
+/* ----------------------------- GitHub bridge ----------------------------- */
+
+app.get("/github", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const s = await one<{ github_token: string | null }>("SELECT github_token FROM user_settings WHERE user_id = $1", [uid]);
+  return c.json({ connected: !!s?.github_token });
+});
+
+app.put("/github", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const token = typeof body.token === "string" ? body.token.trim() : "";
+  let login: string | null = null;
+  if (token) {
+    const r = await fetch("https://api.github.com/user", {
+      headers: { Authorization: `Bearer ${token}`, "User-Agent": "canflow", Accept: "application/vnd.github+json" },
+    });
+    if (!r.ok) return c.json({ error: "That GitHub token was rejected. Check the token and its scopes (needs 'repo')." }, 400);
+    login = ((await r.json()) as { login?: string }).login ?? null;
+  }
+  await query(
+    `INSERT INTO user_settings (user_id, github_token, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (user_id) DO UPDATE SET github_token = EXCLUDED.github_token, updated_at = now()`,
+    [uid, token || null]
+  );
+  return c.json({ connected: !!token, login });
+});
+
+// Create a GitHub issue in the board's repo from a card.
+app.post("/issues/:id/github", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  const row = await one<{ title: string; description: string | null; intensity: number | null; priority: string | null; category: string | null; github_repo: string | null; board_title: string }>(
+    `SELECT t.title, t.description, t.intensity, t.priority, t.category, b.github_repo, b.title AS board_title
+     FROM tasks t JOIN columns col ON col.id = t.column_id JOIN boards b ON b.id = col.board_id
+     WHERE t.id = $1 AND b.owner_id = $2`,
+    [id, uid]
+  );
+  if (!row) return c.json({ error: "Issue not found" }, 404);
+  if (!row.github_repo) return c.json({ error: "This board has no GitHub repo. Set one via the board's Edit menu." }, 400);
+  const s = await one<{ github_token: string | null }>("SELECT github_token FROM user_settings WHERE user_id = $1", [uid]);
+  if (!s?.github_token) return c.json({ error: "Connect GitHub in Settings → Developer first." }, 400);
+
+  const sev = row.intensity ? `**Severity:** ${row.intensity}/10` : row.priority ? `**Priority:** ${row.priority}` : "";
+  const issueBody = [
+    row.description || "",
+    "",
+    sev,
+    row.category ? `**Category:** ${row.category}` : "",
+    "",
+    `<sub>Filed from Canflow — board "${row.board_title}".</sub>`,
+  ].filter(Boolean).join("\n");
+
+  const gh = await fetch(`https://api.github.com/repos/${row.github_repo}/issues`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${s.github_token}`, "User-Agent": "canflow", Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+    body: JSON.stringify({ title: row.title, body: issueBody }),
+  });
+  const gd = (await gh.json()) as { number?: number; html_url?: string; message?: string };
+  if (!gh.ok) return c.json({ error: `GitHub: ${gd.message || gh.status}` }, 400);
+  await query("UPDATE tasks SET github_issue_number = $1, github_url = $2, updated_at = now() WHERE id = $3", [gd.number ?? null, gd.html_url ?? null, id]);
+  return c.json({ number: gd.number, url: gd.html_url });
+});
+
+// GitHub webhook → sync card status from PR lifecycle. Register at repo Settings → Webhooks.
+app.post("/github/webhook", async (c) => {
+  const event = c.req.header("X-GitHub-Event");
+  const payload = (await c.req.json().catch(() => null)) as
+    | { action?: string; pull_request?: { title?: string; body?: string; merged?: boolean }; repository?: { full_name?: string } }
+    | null;
+  if (!payload || event !== "pull_request") return c.json({ ok: true });
+
+  const pr = payload.pull_request;
+  const repo = payload.repository?.full_name;
+  const action = payload.action;
+  if (!pr || !repo) return c.json({ ok: true });
+
+  let phase: string | null = null;
+  if (action === "opened" || action === "reopened") phase = "Fixing";
+  if (action === "closed" && pr.merged) phase = "Verified";
+  if (!phase) return c.json({ ok: true });
+
+  const nums = [...`${pr.title || ""} ${pr.body || ""}`.matchAll(/#(\d+)/g)].map((m) => parseInt(m[1]));
+  for (const n of nums) {
+    const task = await one<{ id: number; board_id: number }>(
+      `SELECT t.id, col.board_id FROM tasks t JOIN columns col ON col.id = t.column_id JOIN boards b ON b.id = col.board_id
+       WHERE t.github_issue_number = $1 AND b.github_repo = $2`,
+      [n, repo]
+    );
+    if (!task) continue;
+    const col = await one<{ id: number }>("SELECT id FROM columns WHERE board_id = $1 AND lower(title) = lower($2)", [task.board_id, phase]);
+    if (col) await query("UPDATE tasks SET column_id = $1, updated_at = now() WHERE id = $2", [col.id, task.id]);
+  }
+  return c.json({ ok: true });
 });
 
 /* ----------------------------- Invited access (open, token-scoped) ----------------------------- */
