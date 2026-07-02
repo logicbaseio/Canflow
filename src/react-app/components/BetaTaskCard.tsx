@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { taskDndId } from '@/react-app/hooks/useBoardDnd';
 import { MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 import type { Task } from '@/shared/types';
@@ -22,7 +23,7 @@ export default function BetaTaskCard({ task, onEdit, onDelete, onFix }: BetaTask
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: taskDndId(task.id) });
 
   const style = {
     transform: CSS.Transform.toString(transform),

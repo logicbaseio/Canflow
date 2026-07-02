@@ -4,6 +4,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Plus, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import TaskCard from './TaskCard';
 import PendingCard from './ui/PendingCard';
+import { colDndId, taskDndId } from '@/react-app/hooks/useBoardDnd';
 import type { Column, Task } from '@/shared/types';
 
 interface KanbanColumnProps {
@@ -28,7 +29,7 @@ export default function KanbanColumn({
   onDeleteColumn,
 }: KanbanColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const { isOver, setNodeRef } = useDroppable({ id: column.id });
+  const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
 
   return (
     <div className="flex w-72 shrink-0 flex-col">
@@ -71,7 +72,7 @@ export default function KanbanColumn({
           isOver ? 'bg-surface-2' : ''
         }`}
       >
-        <SortableContext items={column.tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={column.tasks.map((t) => taskDndId(t.id))} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (
             <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={onFixTask} />
           ))}

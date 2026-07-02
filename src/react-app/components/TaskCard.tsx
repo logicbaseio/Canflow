@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { taskDndId } from '@/react-app/hooks/useBoardDnd';
 import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
@@ -21,7 +22,7 @@ const PRIORITY_DOT: Record<string, string> = {
 
 export default function TaskCard({ task, onEdit, onDelete, onFix }: TaskCardProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: taskDndId(task.id) });
 
   const style = { transform: CSS.Transform.toString(transform), transition };
   const tags = task.tags ? task.tags.split(',').map((t) => t.trim()).filter(Boolean) : [];

@@ -1,15 +1,5 @@
 import { useState } from 'react';
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCorners,
-} from '@dnd-kit/core';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { Plus, Settings, UserPlus, X } from 'lucide-react';
 import BetaColumn from './BetaColumn';
 import BetaTaskCard from './BetaTaskCard';
@@ -20,7 +10,8 @@ import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authedFetch } from '@/react-app/lib/auth';
-import { useBoard, createTask, updateTask, deleteTask, moveTask, createColumn, updateColumn, deleteColumn, useBetaCategories } from '@/react-app/hooks/useApi';
+import { useBoardDnd } from '@/react-app/hooks/useBoardDnd';
+import { useBoard, createTask, updateTask, deleteTask, createColumn, updateColumn, deleteColumn, useBetaCategories } from '@/react-app/hooks/useApi';
 import type { Task, Column, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
 
 interface BetaTestingBoardProps {
@@ -32,7 +23,6 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   const { data: board, loading, refetch } = useBoard(boardId);
   const { data: categories, refetch: refetchCategories } = useBetaCategories(boardId);
   const { confirm, prompt, toast } = useDialog();
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
@@ -46,76 +36,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   const [fixAgent, setFixAgent] = useState<'claude' | 'codex' | null>(null);
   const handleFix = (task: Task, agent: 'claude' | 'codex') => { setFixAgent(agent); setFixingTask(task); };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const task = findTask(active.id as number);
-    setActiveTask(task);
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeTask = findTask(active.id as number);
-    if (!activeTask) return;
-
-    const overColumn = findColumn(over.id as number);
-    if (!overColumn) return;
-
-    if (activeTask.column_id !== overColumn.id) {
-      // Task is moving to different column - UI will update automatically
-    }
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveTask(null);
-
-    if (!over || !board) return;
-
-    const activeTask = findTask(active.id as number);
-    if (!activeTask) return;
-
-    const overColumn = findColumn(over.id as number);
-    if (!overColumn) return;
-
-    try {
-      // Calculate new position
-      const columnWithTasks = board.columns.find(col => col.id === overColumn.id);
-      const newPosition = columnWithTasks ? columnWithTasks.tasks.length : 0;
-
-      await moveTask(activeTask.id, {
-        column_id: overColumn.id,
-        position: newPosition,
-      });
-
-      refetch();
-    } catch (error) {
-      console.error('Failed to move task:', error);
-    }
-  };
-
-  const findTask = (id: number): Task | null => {
-    if (!board) return null;
-    for (const column of board.columns) {
-      const task = column.tasks.find(task => task.id === id);
-      if (task) return task;
-    }
-    return null;
-  };
-
-  const findColumn = (id: number): Column | null => {
-    if (!board) return null;
-    return board.columns.find(column => column.id === id) || null;
-  };
+  const { columns, activeTask, sensors, collisionDetection, onDragStart, onDragOver, onDragEnd } = useBoardDnd(board, refetch);
 
   const handleAddTask = (columnId: number) => {
     setNewTaskColumnId(columnId);
@@ -289,13 +210,13 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 py-5">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
+          collisionDetection={collisionDetection}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
         >
           <div className="flex gap-4 h-full items-stretch">
-            {board.columns.map((column) => (
+            {columns.map((column) => (
               <BetaColumn
                 key={column.id}
                 column={column}

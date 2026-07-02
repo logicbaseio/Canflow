@@ -4,6 +4,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Plus, Mail, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import BetaTaskCard from './BetaTaskCard';
 import PendingCard from './ui/PendingCard';
+import { colDndId, taskDndId } from '@/react-app/hooks/useBoardDnd';
 import type { Column, Task } from '@/shared/types';
 
 interface BetaColumnProps {
@@ -30,7 +31,7 @@ export default function BetaColumn({
   onDeleteColumn,
 }: BetaColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const { isOver, setNodeRef } = useDroppable({ id: column.id });
+  const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
 
   return (
     <div className="flex w-72 shrink-0 flex-col">
@@ -75,7 +76,7 @@ export default function BetaColumn({
         ref={setNodeRef}
         className={`flex-1 min-h-0 overflow-y-auto rounded-xl p-1.5 space-y-2 transition-colors ${isOver ? 'bg-surface-2' : ''}`}
       >
-        <SortableContext items={column.tasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={column.tasks.map(task => taskDndId(task.id))} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (
             <BetaTaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={onFixTask} />
           ))}
