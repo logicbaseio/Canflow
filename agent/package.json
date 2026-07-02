@@ -1,0 +1,18 @@
+{
+  "name": "canflow-agent",
+  "version": "1.0.0",
+  "description": "Autonomous runner that hands Canflow issues to Claude Code / Codex and moves the cards as it works.",
+  "type": "module",
+  "bin": {
+    "canflow-agent": "./index.mjs"
+  },
+  "files": ["index.mjs", "README.md", "LICENSE"],
+  "engines": { "node": ">=18" },
+  "keywords": ["canflow", "claude-code", "codex", "ai-agent", "automation", "issues", "kanban"],
+  "homepage": "https://canflow.app",
+  "repository": { "type": "git", "url": "git+https://github.com/logicbaseio/Canflow.git", "directory": "agent" },
+  "bugs": { "url": "https://github.com/logicbaseio/Canflow/issues" },
+  "author": "Canflow",
+  "license": "MIT",
+  "publishConfig": { "access": "public" }
+}
