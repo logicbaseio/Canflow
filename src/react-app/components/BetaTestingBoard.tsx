@@ -14,6 +14,7 @@ import { Plus, Settings, UserPlus, X } from 'lucide-react';
 import BetaColumn from './BetaColumn';
 import BetaTaskCard from './BetaTaskCard';
 import TaskModal from './TaskModal';
+import FixWithModal from './FixWithModal';
 import Select from '@/react-app/components/ui/Select';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
@@ -41,6 +42,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [fixingTask, setFixingTask] = useState<Task | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -299,6 +301,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
                 onAddTask={handleAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}
+                onFixTask={setFixingTask}
                 onInviteToColumn={handleInviteToColumn}
                 onEditColumn={handleEditColumn}
                 onDeleteColumn={handleDeleteColumn}
@@ -334,6 +337,8 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
         }}
         onSave={handleTaskSave}
       />
+
+      <FixWithModal task={fixingTask} boardTitle={board.title} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
 
       {/* Invite Modal */}
       {showInviteModal && (

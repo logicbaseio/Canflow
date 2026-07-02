@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Edit2, Trash2, Sparkles } from 'lucide-react';
 import type { Task } from '@/shared/types';
 
 interface BetaTaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
+  onFix?: (task: Task) => void;
 }
 
-export default function BetaTaskCard({ task, onEdit, onDelete }: BetaTaskCardProps) {
+export default function BetaTaskCard({ task, onEdit, onDelete, onFix }: BetaTaskCardProps) {
   const [showMenu, setShowMenu] = useState(false);
 
   const {
@@ -62,7 +63,7 @@ export default function BetaTaskCard({ task, onEdit, onDelete }: BetaTaskCardPro
           {showMenu && (
             <>
               <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
-              <div className="menu absolute right-0 top-7 z-20 w-32 py-1">
+              <div className="menu absolute right-0 top-7 z-20 w-44 py-1">
                 <button
                   className="menu-item"
                   onClick={(e) => {
@@ -73,6 +74,19 @@ export default function BetaTaskCard({ task, onEdit, onDelete }: BetaTaskCardPro
                 >
                   <Edit2 size={14} /> Edit
                 </button>
+                {onFix && (
+                  <button
+                    className="menu-item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onFix(task);
+                      setShowMenu(false);
+                    }}
+                  >
+                    <Sparkles size={14} /> Fix with agent
+                  </button>
+                )}
+                <div className="my-1 h-px bg-line" />
                 <button
                   className="menu-item text-danger"
                   onClick={(e) => {

@@ -12,6 +12,7 @@ interface BetaColumnProps {
   onAddTask: (columnId: number) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: number) => void;
+  onFixTask: (task: Task) => void;
   onInviteToColumn: (columnId: number) => void;
   onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: number) => void;
@@ -23,6 +24,7 @@ export default function BetaColumn({
   onAddTask,
   onEditTask,
   onDeleteTask,
+  onFixTask,
   onInviteToColumn,
   onEditColumn,
   onDeleteColumn,
@@ -75,7 +77,7 @@ export default function BetaColumn({
       >
         <SortableContext items={column.tasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (
-            <BetaTaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} />
+            <BetaTaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={onFixTask} />
           ))}
         </SortableContext>
 

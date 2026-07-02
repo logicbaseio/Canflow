@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Task } from '@/shared/types';
 
@@ -9,6 +9,7 @@ interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
+  onFix?: (task: Task) => void;
 }
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -17,7 +18,7 @@ const PRIORITY_DOT: Record<string, string> = {
   low: 'var(--success)',
 };
 
-export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onFix }: TaskCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
 
@@ -50,10 +51,16 @@ export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
           {showMenu && (
             <>
               <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
-              <div className="menu absolute right-0 top-7 z-20 w-32 py-1">
+              <div className="menu absolute right-0 top-7 z-20 w-44 py-1">
                 <button className="menu-item" onClick={(e) => { e.stopPropagation(); onEdit(task); setShowMenu(false); }}>
                   <Edit2 size={14} /> Edit
                 </button>
+                {onFix && (
+                  <button className="menu-item" onClick={(e) => { e.stopPropagation(); onFix(task); setShowMenu(false); }}>
+                    <Sparkles size={14} /> Fix with agent
+                  </button>
+                )}
+                <div className="my-1 h-px bg-line" />
                 <button className="menu-item text-danger" onClick={(e) => { e.stopPropagation(); onDelete(task.id); setShowMenu(false); }}>
                   <Trash2 size={14} /> Delete
                 </button>
