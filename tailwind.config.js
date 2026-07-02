@@ -47,6 +47,16 @@ export default {
       borderColor: {
         DEFAULT: 'var(--border)',
       },
+      // Unify all sized corners to 5px (keeps `full` for avatars/dots, `none` for sharp edges).
+      borderRadius: {
+        sm: '5px',
+        DEFAULT: '5px',
+        md: '5px',
+        lg: '5px',
+        xl: '5px',
+        '2xl': '5px',
+        '3xl': '5px',
+      },
       boxShadow: {
         subtle: '0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.03)',
         pop: '0 8px 28px -8px rgba(0,0,0,0.18), 0 2px 6px -2px rgba(0,0,0,0.08)',
