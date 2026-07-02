@@ -12,7 +12,7 @@ interface KanbanColumnProps {
   onAddTask: (columnId: number) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: number) => void;
-  onFixTask: (task: Task) => void;
+  onFixTask: (task: Task, agent: 'claude' | 'codex') => void;
   onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: number) => void;
 }

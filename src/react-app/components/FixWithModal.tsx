@@ -8,6 +8,7 @@ interface FixWithModalProps {
   task: Task | null;
   boardTitle?: string;
   githubRepo?: string | null;
+  initialAgent?: 'claude' | 'codex' | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -34,7 +35,7 @@ function shArg(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-export default function FixWithModal({ task, boardTitle, githubRepo, isOpen, onClose }: FixWithModalProps) {
+export default function FixWithModal({ task, boardTitle, githubRepo, initialAgent, isOpen, onClose }: FixWithModalProps) {
   const [prompt, setPrompt] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
   const [ghState, setGhState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
@@ -106,11 +107,11 @@ export default function FixWithModal({ task, boardTitle, githubRepo, isOpen, onC
               {copied === 'prompt' ? <><Check size={15} /> Copied prompt</> : <><Copy size={15} /> Copy prompt</>}
             </button>
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => copy(claudeCmd, 'claude')} className="btn btn-outline h-9 justify-center gap-2">
+              <button onClick={() => copy(claudeCmd, 'claude')} className={`btn btn-outline h-9 justify-center gap-2 ${initialAgent === 'claude' ? 'ring-1 ring-[var(--stroke-hard)]' : ''}`}>
                 <ClaudeCodeLogo className="h-4 w-4" />
                 {copied === 'claude' ? 'Copied' : 'Claude Code'}
               </button>
-              <button onClick={() => copy(codexCmd, 'codex')} className="btn btn-outline h-9 justify-center gap-2">
+              <button onClick={() => copy(codexCmd, 'codex')} className={`btn btn-outline h-9 justify-center gap-2 ${initialAgent === 'codex' ? 'ring-1 ring-[var(--stroke-hard)]' : ''}`}>
                 <CodexLogo className="h-4 w-4" />
                 {copied === 'codex' ? 'Copied' : 'Codex'}
               </button>

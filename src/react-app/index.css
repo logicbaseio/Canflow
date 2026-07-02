@@ -19,6 +19,7 @@
   /* Borders */
   --border: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.14);
+  --stroke-hard: #000000;   /* pure black in light, pure white in dark */
 
   /* Text */
   --text: #1d1d1f;
@@ -53,6 +54,7 @@
 
   --border: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.16);
+  --stroke-hard: #ffffff;
 
   --text: #f3f3f5;
   --text-muted: #a3a3ab;

@@ -34,6 +34,8 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
   const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
   const [fixingTask, setFixingTask] = useState<Task | null>(null);
+  const [fixAgent, setFixAgent] = useState<'claude' | 'codex' | null>(null);
+  const handleFix = (task: Task, agent: 'claude' | 'codex') => { setFixAgent(agent); setFixingTask(task); };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -156,7 +158,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
                 onAddTask={handleAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}
-                onFixTask={setFixingTask}
+                onFixTask={handleFix}
                 onEditColumn={handleEditColumn}
                 onDeleteColumn={handleDeleteColumn}
               />
@@ -180,7 +182,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
         onSave={handleTaskSave}
       />
 
-      <FixWithModal task={fixingTask} boardTitle={board.title} githubRepo={board.github_repo} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
+      <FixWithModal task={fixingTask} boardTitle={board.title} githubRepo={board.github_repo} initialAgent={fixAgent} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
     </div>
   );
 }

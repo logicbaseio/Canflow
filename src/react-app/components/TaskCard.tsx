@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown, Sparkles } from 'lucide-react';
+import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { format } from 'date-fns';
+import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 import type { Task } from '@/shared/types';
 
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
-  onFix?: (task: Task) => void;
+  onFix?: (task: Task, agent: 'claude' | 'codex') => void;
 }
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -55,11 +56,6 @@ export default function TaskCard({ task, onEdit, onDelete, onFix }: TaskCardProp
                 <button className="menu-item" onClick={(e) => { e.stopPropagation(); onEdit(task); setShowMenu(false); }}>
                   <Edit2 size={14} /> Edit
                 </button>
-                {onFix && (
-                  <button className="menu-item" onClick={(e) => { e.stopPropagation(); onFix(task); setShowMenu(false); }}>
-                    <Sparkles size={14} /> Fix with agent
-                  </button>
-                )}
                 <div className="my-1 h-px bg-line" />
                 <button className="menu-item text-danger" onClick={(e) => { e.stopPropagation(); onDelete(task.id); setShowMenu(false); }}>
                   <Trash2 size={14} /> Delete
@@ -104,6 +100,25 @@ export default function TaskCard({ task, onEdit, onDelete, onFix }: TaskCardProp
               {task.downvotes > 0 && <span className="inline-flex items-center gap-0.5 text-danger"><ArrowDown size={12} />{task.downvotes}</span>}
             </span>
           )}
+        </div>
+      )}
+
+      {onFix && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); onFix(task, 'claude'); }}
+            style={{ borderColor: 'var(--stroke-hard)' }}
+            className="inline-flex items-center gap-1.5 border rounded-none px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+          >
+            <ClaudeCodeLogo className="h-3.5 w-3.5" /> Fix with Claude Code
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onFix(task, 'codex'); }}
+            style={{ borderColor: 'var(--stroke-hard)' }}
+            className="inline-flex items-center gap-1.5 border rounded-none px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+          >
+            <CodexLogo className="h-3.5 w-3.5" /> Fix with Codex
+          </button>
         </div>
       )}
     </div>

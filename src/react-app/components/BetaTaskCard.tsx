@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Edit2, Trash2, Sparkles } from 'lucide-react';
+import { MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 import type { Task } from '@/shared/types';
 
 interface BetaTaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
-  onFix?: (task: Task) => void;
+  onFix?: (task: Task, agent: 'claude' | 'codex') => void;
 }
 
 export default function BetaTaskCard({ task, onEdit, onDelete, onFix }: BetaTaskCardProps) {
@@ -74,18 +75,6 @@ export default function BetaTaskCard({ task, onEdit, onDelete, onFix }: BetaTask
                 >
                   <Edit2 size={14} /> Edit
                 </button>
-                {onFix && (
-                  <button
-                    className="menu-item"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onFix(task);
-                      setShowMenu(false);
-                    }}
-                  >
-                    <Sparkles size={14} /> Fix with agent
-                  </button>
-                )}
                 <div className="my-1 h-px bg-line" />
                 <button
                   className="menu-item text-danger"
@@ -123,8 +112,26 @@ export default function BetaTaskCard({ task, onEdit, onDelete, onFix }: BetaTask
         </div>
       )}
 
-      <div className="mt-2.5 flex items-center justify-end">
-        <div className="flex -space-x-1">
+      <div className="mt-2.5 flex items-end justify-between gap-2">
+        {onFix ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onFix(task, 'claude'); }}
+              style={{ borderColor: 'var(--stroke-hard)' }}
+              className="inline-flex items-center gap-1.5 border rounded-none px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+            >
+              <ClaudeCodeLogo className="h-3.5 w-3.5" /> Fix with Claude Code
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onFix(task, 'codex'); }}
+              style={{ borderColor: 'var(--stroke-hard)' }}
+              className="inline-flex items-center gap-1.5 border rounded-none px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+            >
+              <CodexLogo className="h-3.5 w-3.5" /> Fix with Codex
+            </button>
+          </div>
+        ) : <span />}
+        <div className="flex -space-x-1 shrink-0">
           <div className="h-6 w-6 rounded-full bg-surface-3 border border-line flex items-center justify-center">
             <span className="text-[11px] font-medium text-ink-muted">
               {task.title.charAt(0).toUpperCase()}

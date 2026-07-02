@@ -43,6 +43,8 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   const [inviteEmail, setInviteEmail] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [fixingTask, setFixingTask] = useState<Task | null>(null);
+  const [fixAgent, setFixAgent] = useState<'claude' | 'codex' | null>(null);
+  const handleFix = (task: Task, agent: 'claude' | 'codex') => { setFixAgent(agent); setFixingTask(task); };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -301,7 +303,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
                 onAddTask={handleAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}
-                onFixTask={setFixingTask}
+                onFixTask={handleFix}
                 onInviteToColumn={handleInviteToColumn}
                 onEditColumn={handleEditColumn}
                 onDeleteColumn={handleDeleteColumn}
@@ -338,7 +340,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
         onSave={handleTaskSave}
       />
 
-      <FixWithModal task={fixingTask} boardTitle={board.title} githubRepo={board.github_repo} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
+      <FixWithModal task={fixingTask} boardTitle={board.title} githubRepo={board.github_repo} initialAgent={fixAgent} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
 
       {/* Invite Modal */}
       {showInviteModal && (
