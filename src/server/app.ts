@@ -127,8 +127,8 @@ app.post("/boards", zValidator("json", CreateBoardSchema), async (c) => {
       ? [
           { title: "Testing", position: 0, color: "#e0e7ff" },
           { title: "Identified Bugs", position: 1, color: "#fef3c7" },
-          { title: "Verified", position: 2, color: "#fed7d7" },
-          { title: "Fixing", position: 3, color: "#dbeafe" },
+          { title: "Fixing", position: 2, color: "#dbeafe" },
+          { title: "Verified", position: 3, color: "#fed7d7" },
           { title: "Shipped", position: 4, color: "#d1fae5" },
         ]
       : [
@@ -560,6 +560,7 @@ app.post("/issues/:id/move", async (c) => {
   const id = parseInt(c.req.param("id"));
   const body = await c.req.json().catch(() => ({}));
   const phase = typeof body.phase === "string" ? body.phase.trim() : "";
+  const note = typeof body.note === "string" ? body.note.trim() : "";
   if (!phase) return c.json({ error: "phase is required" }, 400);
   const t = await one<{ board_id: number }>(
     `SELECT col.board_id FROM tasks t
@@ -574,7 +575,12 @@ app.post("/issues/:id/move", async (c) => {
     const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [t.board_id]);
     return c.json({ error: `Phase "${phase}" not found`, available_phases: phases.map((p) => p.title) }, 400);
   }
-  const updated = await one("UPDATE tasks SET column_id = $1, updated_at = now() WHERE id = $2 RETURNING *", [target.id, id]);
+  const updated = note
+    ? await one(
+        "UPDATE tasks SET column_id = $1, description = trim(COALESCE(description, '') || $2), updated_at = now() WHERE id = $3 RETURNING *",
+        [target.id, `\n\n— 🤖 ${note}`, id]
+      )
+    : await one("UPDATE tasks SET column_id = $1, updated_at = now() WHERE id = $2 RETURNING *", [target.id, id]);
   return c.json(updated);
 });
 

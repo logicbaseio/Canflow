@@ -1,6 +1,14 @@
 # canflow-agent
 
-An autonomous runner that pulls issues from a [Canflow](https://canflow.app) beta-board phase and hands each one to **Claude Code** or **Codex** in your repo — moving the card as it works (source → in-progress → done).
+An autonomous **QA loop** for [Canflow](https://canflow.app) beta-testing boards. Connects with your API token and drives **Claude Code** or **Codex** in your repo, moving cards as it works:
+
+```
+Testing ──(verify: is it a real bug?)──► Identified Bugs   (real)
+        └─────────────────────────────► Verified          (can't reproduce)
+Identified Bugs ──► Fixing ──(implement + self-check)──► Verified
+```
+
+`Verified → Shipped` and `Verified → Testing` (still broken) stay with **you**. Every auto-move writes a short 🤖 note on the card explaining what the agent found or changed.
 
 ## Usage
 
@@ -13,11 +21,33 @@ export CANFLOW_TOKEN=cf_your_token
 # preview what it would do (no changes, no agent run)
 npx -y canflow-agent --dry-run
 
-# work the queue once, confirming each card
+# run the full loop once, confirming each card
 npx -y canflow-agent --once
 
-# run continuously, fully autonomous, with Codex
-CANFLOW_AGENT=codex npx -y canflow-agent --yes
+# run continuously, fully autonomous, scoped to one board
+npx -y canflow-agent --board 12 --yes
+
+# use Codex instead of Claude Code
+npx -y canflow-agent --agent codex --yes
+```
+
+## Modes
+
+| `--mode` | What it does |
+| --- | --- |
+| `loop` *(default)* | Triage `Testing` **and** fix `Identified Bugs` each pass |
+| `verify` | Only triage: `Testing` → `Identified Bugs` / `Verified` |
+| `fix` | Only fix: `Identified Bugs` → `Fixing` → `Verified` |
+
+## How the verdict works
+
+The agent is asked to end its reply with exactly one line, which the runner reads to decide the move:
+
+```
+CANFLOW_VERDICT: CONFIRMED   # real bug  → Identified Bugs
+CANFLOW_VERDICT: NOT_A_BUG   # can't reproduce → Verified
+CANFLOW_VERDICT: FIXED       # fix applied → Verified
+CANFLOW_VERDICT: BLOCKED     # couldn't fix → stays in Fixing
 ```
 
 ## Env
@@ -27,19 +57,18 @@ CANFLOW_AGENT=codex npx -y canflow-agent --yes
 | `CANFLOW_TOKEN` | — | **Required.** Token from Canflow → Settings → Developer |
 | `CANFLOW_API_URL` | `https://canflow.app` | Override for self-hosted |
 | `CANFLOW_AGENT` | `claude` | `claude` or `codex` |
-| `CANFLOW_SOURCE_PHASE` | `Identified Bugs` | Phase to pull issues from |
-| `CANFLOW_IN_PROGRESS_PHASE` | `Fixing` | Where a card goes when work starts |
-| `CANFLOW_DONE_PHASE` | `Verified` | Where a card goes when the agent finishes |
 | `CANFLOW_BOARD_ID` | — | Limit to a single board |
 | `CANFLOW_POLL_SECONDS` | `30` | Poll interval (continuous mode) |
+| `CANFLOW_TESTING_PHASE` | `Testing` | Column reports come from |
+| `CANFLOW_BUGS_PHASE` | `Identified Bugs` | Confirmed bugs |
+| `CANFLOW_FIXING_PHASE` | `Fixing` | In-progress fixes |
+| `CANFLOW_VERIFIED_PHASE` | `Verified` | Awaiting your confirmation |
 
 ## Flags
 
-`--once` run a single pass · `--dry-run` show prompts only · `--yes` don't confirm each card · `--agent <claude\|codex>` · `--phase <name>`
+`--mode <loop\|verify\|fix>` · `--board <id>` · `--agent <claude\|codex>` · `--once` single pass · `--dry-run` show prompts only · `--yes` don't confirm each card
 
-## How it works
-
-For each issue in the source phase it: moves the card to *in-progress*, builds a prompt (title, severity, category, description), runs `claude -p '…'` or `codex exec '…'` in the current directory, and — if the agent exits 0 — moves the card to *done*. It runs in **your** environment, so you control the repo and can review the changes before committing.
+It runs in **your** environment, so you control the repo and can review every change (nothing is committed for you).
 
 ## License
 

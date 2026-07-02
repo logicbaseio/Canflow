@@ -203,6 +203,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const tok = createdToken || tokens.find((t) => t.token)?.token || '<YOUR_TOKEN>';
   const claudeCmd = `claude mcp add canflow --env CANFLOW_TOKEN=${tok} -- npx -y canflow-mcp`;
   const codexCfg = `[mcp_servers.canflow]\ncommand = "npx"\nargs = ["-y", "canflow-mcp"]\nenv = { CANFLOW_TOKEN = "${tok}" }`;
+  const loopCmd = `CANFLOW_TOKEN=${tok} npx -y canflow-agent --agent claude --yes`;
 
   return (
     <div className="fixed inset-0 z-50 bg-app text-ink flex flex-col animate-fade-in">
@@ -411,6 +412,28 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   <p className="mt-3.5 text-[11.5px] text-ink-subtle leading-relaxed">
                     <code className="font-mono">canflow-mcp</code> is published on npm. Create a token above and it's filled into these commands automatically — just copy and run. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Identified Bugs' phase, fix them, and move each to Fixing then Verified."</span>
+                  </p>
+                </div>
+
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Autonomous QA loop</p>
+                  <p className="mb-3 text-[11.5px] text-ink-subtle leading-relaxed max-w-xl">
+                    Run this from your app's repo. Canflow keeps watch and hands each report to your agent:
+                    it <span className="text-ink-muted">verifies</span> whether a bug in <span className="font-mono">Testing</span> is real
+                    (→ <span className="font-mono">Identified Bugs</span>), then <span className="text-ink-muted">fixes</span> it
+                    (→ <span className="font-mono">Fixing</span> → <span className="font-mono">Verified</span>), writing a note on each card.
+                    You confirm from <span className="font-mono">Verified</span> → <span className="font-mono">Shipped</span>.
+                  </p>
+                  <AgentCard
+                    logo={<ClaudeCodeLogo className="h-8 w-8" />}
+                    name="canflow-agent"
+                    hint="Run in your repo — verifies, fixes & moves cards"
+                    code={loopCmd}
+                    onCopy={() => copy(loopCmd, 'loop')}
+                    copied={copied === 'loop'}
+                  />
+                  <p className="mt-2.5 text-[11.5px] text-ink-subtle leading-relaxed">
+                    Add <code className="font-mono">--board &lt;id&gt;</code> to scope it to one board, <code className="font-mono">--agent codex</code> to use Codex, or <code className="font-mono">--once</code> for a single pass. Leave it running to keep the loop live.
                   </p>
                 </div>
 
