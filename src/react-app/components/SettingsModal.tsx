@@ -411,7 +411,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </div>
 
                   <p className="mt-3.5 text-[11.5px] text-ink-subtle leading-relaxed">
-                    <code className="font-mono">canflow-mcp</code> is published on npm. Create a token above and it's filled into these commands automatically — just copy and run. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Identified Bugs' phase, fix them, and move each to Fixing then Verified."</span>
+                    <code className="font-mono">canflow-mcp</code> is published on npm. Create a token above and it's filled into these commands automatically — just copy and run. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Issues Identified' phase, fix them, and move each to Fixing then Verified."</span>
                   </p>
                 </div>
 
@@ -420,7 +420,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <p className="mb-3 text-[11.5px] text-ink-subtle leading-relaxed max-w-xl">
                     Run this from your app's repo. Canflow keeps watch and hands each report to your agent:
                     it <span className="text-ink-muted">verifies</span> whether a bug in <span className="font-mono">Testing</span> is real
-                    (→ <span className="font-mono">Identified Bugs</span>), then <span className="text-ink-muted">fixes</span> it
+                    (→ <span className="font-mono">Issues Identified</span>), then <span className="text-ink-muted">fixes</span> it
                     (→ <span className="font-mono">Fixing</span> → <span className="font-mono">Verified</span>), writing a note on each card.
                     You confirm from <span className="font-mono">Verified</span> → <span className="font-mono">Shipped</span>.
                   </p>

@@ -5,9 +5,9 @@
  * Connects to Canflow with your API token and drives Claude Code / Codex through
  * the board, moving cards as it works:
  *
- *   Testing ──(verify: is it a real bug?)──► Identified Bugs        (real)
+ *   Testing ──(verify: is it a real bug?)──► Issues Identified        (real)
  *           └─────────────────────────────► Verified               (can't reproduce)
- *   Identified Bugs ──► Fixing ──(implement + self-check)──► Verified
+ *   Issues Identified ──► Fixing ──(implement + self-check)──► Verified
  *
  *   Verified ──► Shipped   and   Verified ──► Testing   are left to YOU (the human).
  *
@@ -22,7 +22,7 @@
  *   CANFLOW_POLL_SECONDS     poll interval         (default: 30)
  *   CANFLOW_AGENT_CMD        override the command (advanced/testing)
  *   CANFLOW_TESTING_PHASE    (default: "Testing")
- *   CANFLOW_BUGS_PHASE       (default: "Identified Bugs")
+ *   CANFLOW_BUGS_PHASE       (default: "Issues Identified")
  *   CANFLOW_FIXING_PHASE     (default: "Fixing")
  *   CANFLOW_VERIFIED_PHASE   (default: "Verified")
  *
@@ -57,7 +57,7 @@ const BOARD = flags.board || process.env.CANFLOW_BOARD_ID;
 const POLL = Math.max(5, parseInt(process.env.CANFLOW_POLL_SECONDS || "30", 10));
 
 const TESTING = process.env.CANFLOW_TESTING_PHASE || "Testing";
-const BUGS = process.env.CANFLOW_BUGS_PHASE || "Identified Bugs";
+const BUGS = process.env.CANFLOW_BUGS_PHASE || "Issues Identified";
 const FIXING = process.env.CANFLOW_FIXING_PHASE || "Fixing";
 const VERIFIED = process.env.CANFLOW_VERIFIED_PHASE || "Verified";
 
@@ -207,7 +207,7 @@ async function triageStage() {
   }
 }
 
-// Stage 2: fix bugs in Identified Bugs.
+// Stage 2: fix bugs in Issues Identified.
 async function fixStage() {
   const issues = await listIssues(BUGS);
   if (!issues.length) { console.log(`· no bugs in "${BUGS}"`); return; }

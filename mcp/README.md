@@ -39,7 +39,7 @@ env = { CANFLOW_TOKEN = "cf_your_token" }
 
 ## Example prompt
 
-> Pull the bugs from my Canflow "Identified Bugs" phase, fix them one by one, and move each card to Fixing then Verified.
+> Pull the bugs from my Canflow "Issues Identified" phase, fix them one by one, and move each card to Fixing then Verified.
 
 ## License
 

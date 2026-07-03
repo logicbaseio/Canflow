@@ -126,7 +126,7 @@ app.post("/boards", zValidator("json", CreateBoardSchema), async (c) => {
       : data.board_type === "beta-testing"
       ? [
           { title: "Testing", position: 0, color: "#e0e7ff" },
-          { title: "Identified Bugs", position: 1, color: "#fef3c7" },
+          { title: "Issues Identified", position: 1, color: "#fef3c7" },
           { title: "Fixing", position: 2, color: "#dbeafe" },
           { title: "Verified", position: 3, color: "#fed7d7" },
           { title: "Shipped", position: 4, color: "#d1fae5" },

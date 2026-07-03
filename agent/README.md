@@ -3,9 +3,9 @@
 An autonomous **QA loop** for [Canflow](https://canflow.app) beta-testing boards. Connects with your API token and drives **Claude Code** or **Codex** in your repo, moving cards as it works:
 
 ```
-Testing ──(verify: is it a real bug?)──► Identified Bugs   (real)
+Testing ──(verify: is it a real bug?)──► Issues Identified   (real)
         └─────────────────────────────► Verified          (can't reproduce)
-Identified Bugs ──► Fixing ──(implement + self-check)──► Verified
+Issues Identified ──► Fixing ──(implement + self-check)──► Verified
 ```
 
 `Verified → Shipped` and `Verified → Testing` (still broken) stay with **you**. Every auto-move writes a short 🤖 note on the card explaining what the agent found or changed.
@@ -35,16 +35,16 @@ npx -y canflow-agent --agent codex --yes
 
 | `--mode` | What it does |
 | --- | --- |
-| `loop` *(default)* | Triage `Testing` **and** fix `Identified Bugs` each pass |
-| `verify` | Only triage: `Testing` → `Identified Bugs` / `Verified` |
-| `fix` | Only fix: `Identified Bugs` → `Fixing` → `Verified` |
+| `loop` *(default)* | Triage `Testing` **and** fix `Issues Identified` each pass |
+| `verify` | Only triage: `Testing` → `Issues Identified` / `Verified` |
+| `fix` | Only fix: `Issues Identified` → `Fixing` → `Verified` |
 
 ## How the verdict works
 
 The agent is asked to end its reply with exactly one line, which the runner reads to decide the move:
 
 ```
-CANFLOW_VERDICT: CONFIRMED   # real bug  → Identified Bugs
+CANFLOW_VERDICT: CONFIRMED   # real bug  → Issues Identified
 CANFLOW_VERDICT: NOT_A_BUG   # can't reproduce → Verified
 CANFLOW_VERDICT: FIXED       # fix applied → Verified
 CANFLOW_VERDICT: BLOCKED     # couldn't fix → stays in Fixing
@@ -60,7 +60,7 @@ CANFLOW_VERDICT: BLOCKED     # couldn't fix → stays in Fixing
 | `CANFLOW_BOARD_ID` | — | Limit to a single board |
 | `CANFLOW_POLL_SECONDS` | `30` | Poll interval (continuous mode) |
 | `CANFLOW_TESTING_PHASE` | `Testing` | Column reports come from |
-| `CANFLOW_BUGS_PHASE` | `Identified Bugs` | Confirmed bugs |
+| `CANFLOW_BUGS_PHASE` | `Issues Identified` | Confirmed bugs |
 | `CANFLOW_FIXING_PHASE` | `Fixing` | In-progress fixes |
 | `CANFLOW_VERIFIED_PHASE` | `Verified` | Awaiting your confirmation |
 

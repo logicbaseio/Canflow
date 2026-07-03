@@ -40,7 +40,7 @@ server.registerTool(
   {
     title: "List issues",
     description:
-      "List bug/issue cards from your Canflow beta-testing boards. Optionally filter by phase (column name, e.g. \"Identified Bugs\") or board_id. Use this to pull the queue of issues to work on.",
+      "List bug/issue cards from your Canflow beta-testing boards. Optionally filter by phase (column name, e.g. \"Issues Identified\") or board_id. Use this to pull the queue of issues to work on.",
     inputSchema: { phase: z.string().optional(), board_id: z.number().optional() },
   },
   async ({ phase, board_id }) => {
