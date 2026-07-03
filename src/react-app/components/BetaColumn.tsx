@@ -32,6 +32,9 @@ export default function BetaColumn({
 }: BetaColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
+  // "Fix with…" only makes sense before work starts — hide it once a card is in
+  // a Fixing / Verified / Shipped phase (already being fixed, fixed, or done).
+  const fixable = !['fixing', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
 
   return (
     <div className="flex w-72 shrink-0 flex-col">
@@ -78,7 +81,7 @@ export default function BetaColumn({
       >
         <SortableContext items={column.tasks.map(task => taskDndId(task.id))} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (
-            <BetaTaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={onFixTask} />
+            <BetaTaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={fixable ? onFixTask : undefined} />
           ))}
         </SortableContext>
 

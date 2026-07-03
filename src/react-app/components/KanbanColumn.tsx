@@ -30,6 +30,7 @@ export default function KanbanColumn({
 }: KanbanColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
+  const fixable = !['fixing', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
 
   return (
     <div className="flex w-72 shrink-0 flex-col">
@@ -74,7 +75,7 @@ export default function KanbanColumn({
       >
         <SortableContext items={column.tasks.map((t) => taskDndId(t.id))} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={onFixTask} />
+            <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={fixable ? onFixTask : undefined} />
           ))}
         </SortableContext>
 

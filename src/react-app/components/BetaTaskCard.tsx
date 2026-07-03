@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { taskDndId } from '@/react-app/hooks/useBoardDnd';
 import { MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
+import { AgentStatusBadge } from '@/react-app/components/ui/AgentStatusBadge';
 import type { Task } from '@/shared/types';
 
 interface BetaTaskCardProps {
@@ -97,7 +98,7 @@ export default function BetaTaskCard({ task, onEdit, onDelete, onFix }: BetaTask
         <p className="mt-1 text-[12px] leading-[1.45] text-ink-muted line-clamp-2">{task.description}</p>
       )}
 
-      {(task.intensity > 0 || task.category) && (
+      {(task.intensity > 0 || task.category || task.agent) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {task.intensity > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-muted">
@@ -110,6 +111,7 @@ export default function BetaTaskCard({ task, onEdit, onDelete, onFix }: BetaTask
               {task.category}
             </span>
           )}
+          <AgentStatusBadge agent={task.agent} status={task.agent_status} />
         </div>
       )}
 

@@ -88,8 +88,12 @@ function listIssues(phase) {
   return api(`/issues?${q}`);
 }
 
-function move(id, phase, note) {
-  return api(`/issues/${id}/move`, { method: "POST", body: JSON.stringify(note ? { phase, note } : { phase }) });
+// Move a card and stamp it with which agent acted and a short status the card renders as a badge.
+function move(id, phase, { note, status } = {}) {
+  const body = { phase, agent: AGENT };
+  if (note) body.note = note;
+  if (status) body.status = status;
+  return api(`/issues/${id}/move`, { method: "POST", body: JSON.stringify(body) });
 }
 
 function severity(issue) {
@@ -196,11 +200,11 @@ async function triageStage() {
     const summary = summarize(output);
     try {
       if (verdict === "NOT_A_BUG") {
-        await move(issue.id, VERIFIED, `Triaged by ${AGENT}: could not reproduce / not a bug — please confirm or add repro steps.${summary ? "\n" + summary : ""}`);
+        await move(issue.id, VERIFIED, { status: "not_a_bug", note: `Triaged by ${AGENT}: could not reproduce / not a bug — please confirm or add repro steps.${summary ? "\n" + summary : ""}` });
         console.log(`  → "${VERIFIED}" (not reproducible)`);
       } else {
         const label = verdict === "CONFIRMED" ? "confirmed a real bug" : "triage inconclusive — treating as a bug";
-        await move(issue.id, BUGS, `Triaged by ${AGENT}: ${label}.${summary ? "\n" + summary : ""}`);
+        await move(issue.id, BUGS, { status: "confirmed", note: `Triaged by ${AGENT}: ${label}.${summary ? "\n" + summary : ""}` });
         console.log(`  → "${BUGS}"${verdict ? "" : " (inconclusive)"}`);
       }
     } catch (e) { console.error(`  ✗ ${e.message}`); }
@@ -217,16 +221,16 @@ async function fixStage() {
     if (flags["dry-run"]) { printPrompt(buildFixPrompt(issue)); continue; }
     if (!(await confirm(`  Fix with ${AGENT}?`))) { console.log("  skipped"); continue; }
     try {
-      await move(issue.id, FIXING);
+      await move(issue.id, FIXING, { status: "fixing" });
       console.log(`  → "${FIXING}", running ${AGENT}…\n`);
       const { code, output } = await runAgent(buildFixPrompt(issue));
       const verdict = parseVerdict(output);
       const summary = summarize(output);
       if (code === 0 && verdict !== "BLOCKED") {
-        await move(issue.id, VERIFIED, `Fixed by ${AGENT} — please verify, then move to Shipped.${summary ? "\n" + summary : ""}`);
+        await move(issue.id, VERIFIED, { status: "fixed", note: `Fixed by ${AGENT} — please verify, then move to Shipped.${summary ? "\n" + summary : ""}` });
         console.log(`  ✓ → "${VERIFIED}"`);
       } else {
-        await move(issue.id, FIXING, `${AGENT} could not fix this (exit ${code}${verdict ? ", " + verdict : ""}) — needs a human.${summary ? "\n" + summary : ""}`);
+        await move(issue.id, FIXING, { status: "blocked", note: `${AGENT} could not fix this (exit ${code}${verdict ? ", " + verdict : ""}) — needs a human.${summary ? "\n" + summary : ""}` });
         console.log(`  ✗ left in "${FIXING}"`);
       }
     } catch (e) { console.error(`  ✗ ${e.message}`); }

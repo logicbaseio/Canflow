@@ -5,6 +5,7 @@ import { taskDndId } from '@/react-app/hooks/useBoardDnd';
 import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
+import { AgentStatusBadge } from '@/react-app/components/ui/AgentStatusBadge';
 import type { Task } from '@/shared/types';
 
 interface TaskCardProps {
@@ -71,8 +72,9 @@ export default function TaskCard({ task, onEdit, onDelete, onFix }: TaskCardProp
         <p className="mt-1 text-[12px] leading-[1.45] text-ink-muted line-clamp-3">{task.description}</p>
       )}
 
-      {(task.priority || tags.length > 0) && (
+      {(task.priority || tags.length > 0 || task.agent) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <AgentStatusBadge agent={task.agent} status={task.agent_status} />
           {task.priority && (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium capitalize text-ink-muted">
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: PRIORITY_DOT[task.priority] || 'var(--text-subtle)' }} />

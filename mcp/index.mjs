@@ -67,10 +67,23 @@ server.registerTool(
   {
     title: "Move issue",
     description:
-      "Move a Canflow issue to a different phase/column to reflect progress (e.g. \"Fixing\" when you start, \"Verified\" or \"Shipped\" when done).",
-    inputSchema: { id: z.number(), phase: z.string() },
+      "Move a Canflow issue to a different phase/column to reflect progress (e.g. \"Fixing\" when you start, \"Verified\" or \"Shipped\" when done). " +
+      "Optionally pass agent (\"claude\" or \"codex\") and status (\"confirmed\" | \"fixing\" | \"fixed\" | \"blocked\" | \"not_a_bug\") to stamp the card with a status badge, and note to append a short comment/status update onto the card.",
+    inputSchema: {
+      id: z.number(),
+      phase: z.string(),
+      agent: z.enum(["claude", "codex"]).optional(),
+      status: z.enum(["confirmed", "fixing", "fixed", "blocked", "not_a_bug"]).optional(),
+      note: z.string().optional(),
+    },
   },
-  async ({ id, phase }) => ok(await api(`/issues/${id}/move`, { method: "POST", body: JSON.stringify({ phase }) }))
+  async ({ id, phase, agent, status, note }) => {
+    const body = { phase };
+    if (agent) body.agent = agent;
+    if (status) body.status = status;
+    if (note) body.note = note;
+    return ok(await api(`/issues/${id}/move`, { method: "POST", body: JSON.stringify(body) }));
+  }
 );
 
 await server.connect(new StdioServerTransport());

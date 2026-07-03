@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   image_url   TEXT,
   github_issue_number INTEGER,
   github_url  TEXT,
+  agent        TEXT,   -- 'claude' | 'codex' — which coding agent last worked this card
+  agent_status TEXT,   -- 'confirmed' | 'fixing' | 'fixed' | 'blocked' | 'not_a_bug'
   upvotes     INTEGER DEFAULT 0,
   downvotes   INTEGER DEFAULT 0,
   created_at  TIMESTAMPTZ DEFAULT now(),

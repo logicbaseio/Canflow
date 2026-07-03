@@ -561,6 +561,10 @@ app.post("/issues/:id/move", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const phase = typeof body.phase === "string" ? body.phase.trim() : "";
   const note = typeof body.note === "string" ? body.note.trim() : "";
+  const agent = typeof body.agent === "string" && ["claude", "codex"].includes(body.agent.trim().toLowerCase())
+    ? body.agent.trim().toLowerCase()
+    : "";
+  const status = typeof body.status === "string" ? body.status.trim().toLowerCase() : "";
   if (!phase) return c.json({ error: "phase is required" }, 400);
   const t = await one<{ board_id: number }>(
     `SELECT col.board_id FROM tasks t
@@ -575,12 +579,15 @@ app.post("/issues/:id/move", async (c) => {
     const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [t.board_id]);
     return c.json({ error: `Phase "${phase}" not found`, available_phases: phases.map((p) => p.title) }, 400);
   }
-  const updated = note
-    ? await one(
-        "UPDATE tasks SET column_id = $1, description = trim(COALESCE(description, '') || $2), updated_at = now() WHERE id = $3 RETURNING *",
-        [target.id, `\n\n— 🤖 ${note}`, id]
-      )
-    : await one("UPDATE tasks SET column_id = $1, updated_at = now() WHERE id = $2 RETURNING *", [target.id, id]);
+  const sets = ["column_id = $1"];
+  const vals: unknown[] = [target.id];
+  let i = 2;
+  if (note) { sets.push(`description = trim(COALESCE(description, '') || $${i++})`); vals.push(`\n\n— 🤖 ${note}`); }
+  if (agent) { sets.push(`agent = $${i++}`); vals.push(agent); }
+  if (status) { sets.push(`agent_status = $${i++}`); vals.push(status); }
+  sets.push("updated_at = now()");
+  vals.push(id);
+  const updated = await one(`UPDATE tasks SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, vals);
   return c.json(updated);
 });
 
