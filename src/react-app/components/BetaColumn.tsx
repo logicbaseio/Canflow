@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Plus, Mail, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Mail, MoreHorizontal, Trash2 } from 'lucide-react';
 import BetaTaskCard from './BetaTaskCard';
 import PendingCard from './ui/PendingCard';
 import { colDndId, taskDndId } from '@/react-app/hooks/useBoardDnd';
@@ -15,7 +15,6 @@ interface BetaColumnProps {
   onDeleteTask: (id: number) => void;
   onFixTask: (task: Task, agent: 'claude' | 'codex') => void;
   onInviteToColumn: (columnId: number) => void;
-  onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: number) => void;
 }
 
@@ -27,7 +26,6 @@ export default function BetaColumn({
   onDeleteTask,
   onFixTask,
   onInviteToColumn,
-  onEditColumn,
   onDeleteColumn,
 }: BetaColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -61,9 +59,6 @@ export default function BetaColumn({
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                 <div className="menu absolute right-0 top-7 z-20 w-40 py-1">
-                  <button className="menu-item" onClick={() => { onEditColumn(column); setShowMenu(false); }}>
-                    <Edit2 size={14} /> Rename phase
-                  </button>
                   <button className="menu-item text-danger" onClick={() => { onDeleteColumn(column.id); setShowMenu(false); }}>
                     <Trash2 size={14} /> Delete phase
                   </button>

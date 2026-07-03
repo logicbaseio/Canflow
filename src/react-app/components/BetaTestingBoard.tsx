@@ -11,8 +11,8 @@ import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authedFetch } from '@/react-app/lib/auth';
 import { useBoardDnd } from '@/react-app/hooks/useBoardDnd';
-import { useBoard, createTask, updateTask, deleteTask, createColumn, updateColumn, deleteColumn, useBetaCategories } from '@/react-app/hooks/useApi';
-import type { Task, Column, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
+import { useBoard, createTask, updateTask, deleteTask, createColumn, deleteColumn, useBetaCategories } from '@/react-app/hooks/useApi';
+import type { Task, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
 
 interface BetaTestingBoardProps {
   boardId: number;
@@ -94,12 +94,6 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
     } catch (error) {
       console.error('Failed to create column:', error);
     }
-  };
-
-  const handleEditColumn = async (column: Column) => {
-    const title = await prompt({ title: 'Rename phase', defaultValue: column.title, confirmText: 'Rename' });
-    if (!title?.trim() || title === column.title) return;
-    try { await updateColumn(column.id, { title: title.trim() }); refetch(); } catch (e) { console.error('Failed to rename phase:', e); }
   };
 
   const handleDeleteColumn = async (columnId: number) => {
@@ -226,7 +220,6 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
                 onDeleteTask={handleDeleteTask}
                 onFixTask={handleFix}
                 onInviteToColumn={handleInviteToColumn}
-                onEditColumn={handleEditColumn}
                 onDeleteColumn={handleDeleteColumn}
               />
             ))}
