@@ -32,7 +32,7 @@ export default function BetaColumn({
   const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
   // "Fix with…" only makes sense before work starts — hide it once a card is in
   // a Fixing / Verified / Shipped phase (already being fixed, fixed, or done).
-  const fixable = !['fixing', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
+  const fixable = !['fixing', 'fixed', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
 
   return (
     <div className="flex w-72 shrink-0 flex-col">

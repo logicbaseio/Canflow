@@ -75,6 +75,7 @@ export const TaskSchema = z.object({
   github_url: z.string().nullable().optional(),
   agent: z.string().nullable().optional(),
   agent_status: z.string().nullable().optional(),
+  agent_note: z.string().nullable().optional(),
   upvotes: z.number().default(0),
   downvotes: z.number().default(0),
   created_at: z.string(),

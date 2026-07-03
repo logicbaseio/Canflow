@@ -30,7 +30,7 @@ export default function KanbanColumn({
 }: KanbanColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
-  const fixable = !['fixing', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
+  const fixable = !['fixing', 'fixed', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
 
   return (
     <div className="flex w-72 shrink-0 flex-col">

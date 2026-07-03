@@ -68,12 +68,12 @@ server.registerTool(
     title: "Move issue",
     description:
       "Move a Canflow issue to a different phase/column to reflect progress (e.g. \"Fixing\" when you start, \"Verified\" or \"Shipped\" when done). " +
-      "Optionally pass agent (\"claude\" or \"codex\") and status (\"confirmed\" | \"fixing\" | \"fixed\" | \"blocked\" | \"not_a_bug\") to stamp the card with a status badge, and note to append a short comment/status update onto the card.",
+      "Optionally pass agent (\"claude\" or \"codex\") and status (\"confirmed\" | \"fixing\" | \"fixed\" | \"verified\" | \"blocked\" | \"not_a_bug\") to stamp the card with a status badge, and note to record a short comment/status update shown in the card's Agent activity section.",
     inputSchema: {
       id: z.number(),
       phase: z.string(),
       agent: z.enum(["claude", "codex"]).optional(),
-      status: z.enum(["confirmed", "fixing", "fixed", "blocked", "not_a_bug"]).optional(),
+      status: z.enum(["confirmed", "fixing", "fixed", "verified", "blocked", "not_a_bug"]).optional(),
       note: z.string().optional(),
     },
   },

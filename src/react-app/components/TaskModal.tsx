@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import Select from '@/react-app/components/ui/Select';
 import DatePicker from '@/react-app/components/ui/DatePicker';
+import { AgentStatusBadge } from '@/react-app/components/ui/AgentStatusBadge';
 import type { Task, CreateTask, UpdateTask } from '@/shared/types';
 
 interface TaskModalProps {
@@ -135,6 +136,18 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
+          {task?.agent && (
+            <div className="rounded-lg border border-line bg-surface-2 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Agent activity</span>
+                <AgentStatusBadge agent={task.agent} status={task.agent_status} />
+              </div>
+              {task.agent_note && (
+                <p className="mt-2 text-[12.5px] leading-relaxed text-ink-muted whitespace-pre-wrap">{task.agent_note}</p>
+              )}
+            </div>
+          )}
+
           <Field label={`${taskLabel} title`}>
             <input
               type="text"

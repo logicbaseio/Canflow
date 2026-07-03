@@ -421,8 +421,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     Run this from your app's repo. Canflow keeps watch and hands each report to your agent:
                     it <span className="text-ink-muted">verifies</span> whether a bug in <span className="font-mono">Testing</span> is real
                     (→ <span className="font-mono">Issues Identified</span>), then <span className="text-ink-muted">fixes</span> it
-                    (→ <span className="font-mono">Fixing</span> → <span className="font-mono">Verified</span>), writing a note on each card.
-                    You confirm from <span className="font-mono">Verified</span> → <span className="font-mono">Shipped</span>.
+                    (→ <span className="font-mono">Fixing</span> → <span className="font-mono">Fixed</span>), leaving a status + note on each card.
+                    You (or the agent with <span className="font-mono">--mode verify-fix</span>) confirm <span className="font-mono">Fixed</span> → <span className="font-mono">Verified</span> → <span className="font-mono">Shipped</span>.
                   </p>
                   <AgentCard
                     logo={<ClaudeCodeLogo className="h-8 w-8" />}

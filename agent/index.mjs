@@ -7,12 +7,13 @@
  *
  *   Testing ──(verify: is it a real bug?)──► Issues Identified        (real)
  *           └─────────────────────────────► Verified               (can't reproduce)
- *   Issues Identified ──► Fixing ──(implement + self-check)──► Verified
+ *   Issues Identified ──► Fixing ──(implement + self-check)──► Fixed
+ *   Fixed ──(mode verify-fix, optional)──► Verified / back to Issues Identified
  *
- *   Verified ──► Shipped   and   Verified ──► Testing   are left to YOU (the human).
+ *   Fixed ──► Verified (manual) and Verified ──► Shipped are normally left to YOU.
  *
  * The agent emits a verdict line the runner reads:
- *   CANFLOW_VERDICT: CONFIRMED | NOT_A_BUG | FIXED | BLOCKED
+ *   CANFLOW_VERDICT: CONFIRMED | NOT_A_BUG | FIXED | BLOCKED | VERIFIED | REGRESSED
  *
  * Env:
  *   CANFLOW_TOKEN            (required) token from Canflow → Settings → Developer
@@ -24,10 +25,11 @@
  *   CANFLOW_TESTING_PHASE    (default: "Testing")
  *   CANFLOW_BUGS_PHASE       (default: "Issues Identified")
  *   CANFLOW_FIXING_PHASE     (default: "Fixing")
+ *   CANFLOW_FIXED_PHASE      (default: "Fixed")
  *   CANFLOW_VERIFIED_PHASE   (default: "Verified")
  *
  * Flags:
- *   --mode <loop|verify|fix>   loop = triage + fix (default)
+ *   --mode <loop|verify|fix|verify-fix>   loop = triage + fix (default)
  *   --board <id>               limit to one board
  *   --agent <claude|codex>
  *   --once                     one pass and exit
@@ -59,14 +61,15 @@ const POLL = Math.max(5, parseInt(process.env.CANFLOW_POLL_SECONDS || "30", 10))
 const TESTING = process.env.CANFLOW_TESTING_PHASE || "Testing";
 const BUGS = process.env.CANFLOW_BUGS_PHASE || "Issues Identified";
 const FIXING = process.env.CANFLOW_FIXING_PHASE || "Fixing";
+const FIXED = process.env.CANFLOW_FIXED_PHASE || "Fixed";
 const VERIFIED = process.env.CANFLOW_VERIFIED_PHASE || "Verified";
 
 if (!TOKEN) {
   console.error("CANFLOW_TOKEN is required. Create one in Canflow → Settings → Developer.");
   process.exit(1);
 }
-if (!["loop", "verify", "fix"].includes(MODE)) {
-  console.error(`Unknown --mode "${MODE}". Use loop, verify, or fix.`);
+if (!["loop", "verify", "fix", "verify-fix"].includes(MODE)) {
+  console.error(`Unknown --mode "${MODE}". Use loop, verify, fix, or verify-fix.`);
   process.exit(1);
 }
 
@@ -132,6 +135,23 @@ function buildFixPrompt(issue) {
     `Finish with a one-line summary of what you changed, then EXACTLY one verdict line:`,
     `  CANFLOW_VERDICT: FIXED     — you implemented and verified a fix`,
     `  CANFLOW_VERDICT: BLOCKED   — you could not fix it (say why)`,
+  ].filter((l) => l !== "").join("\n");
+}
+
+function buildVerifyFixPrompt(issue) {
+  return [
+    `A fix was applied for this bug in our app "${issue.board_title}" (tracked in Canflow). VERIFY the fix truly resolves it — do not change anything unless the fix is wrong.`,
+    "",
+    `Title: ${issue.title}`,
+    severity(issue),
+    issue.category ? `Category: ${issue.category}` : "",
+    issue.description ? `\nReport:\n${issue.description}` : "",
+    issue.agent_note ? `\nWhat was done:\n${issue.agent_note}` : "",
+    "",
+    `Re-check the relevant code / behaviour and confirm the reported problem no longer happens.`,
+    `Finish with a one-line summary, then EXACTLY one verdict line:`,
+    `  CANFLOW_VERDICT: VERIFIED   — the fix works, issue is resolved`,
+    `  CANFLOW_VERDICT: REGRESSED  — still broken; send it back to be fixed`,
   ].filter((l) => l !== "").join("\n");
 }
 
@@ -227,8 +247,8 @@ async function fixStage() {
       const verdict = parseVerdict(output);
       const summary = summarize(output);
       if (code === 0 && verdict !== "BLOCKED") {
-        await move(issue.id, VERIFIED, { status: "fixed", note: `Fixed by ${AGENT} — please verify, then move to Shipped.${summary ? "\n" + summary : ""}` });
-        console.log(`  ✓ → "${VERIFIED}"`);
+        await move(issue.id, FIXED, { status: "fixed", note: `Fixed by ${AGENT} — verify it, then move to Verified.${summary ? "\n" + summary : ""}` });
+        console.log(`  ✓ → "${FIXED}"`);
       } else {
         await move(issue.id, FIXING, { status: "blocked", note: `${AGENT} could not fix this (exit ${code}${verdict ? ", " + verdict : ""}) — needs a human.${summary ? "\n" + summary : ""}` });
         console.log(`  ✗ left in "${FIXING}"`);
@@ -237,15 +257,41 @@ async function fixStage() {
   }
 }
 
+// Optional stage: verify that fixes in "Fixed" actually resolved the issue.
+async function verifyFixStage() {
+  const issues = await listIssues(FIXED);
+  if (!issues.length) { console.log(`· no fixes to verify in "${FIXED}"`); return; }
+  console.log(`\nVerify fixes — ${issues.length} card(s) in "${FIXED}":`);
+  for (const issue of issues) {
+    console.log(`\n✅ verify-fix #${issue.id}  ${issue.title}  [${issue.board_title}]`);
+    if (flags["dry-run"]) { printPrompt(buildVerifyFixPrompt(issue)); continue; }
+    if (!(await confirm(`  Verify the fix with ${AGENT}?`))) { console.log("  skipped"); continue; }
+    const { output } = await runAgent(buildVerifyFixPrompt(issue));
+    const verdict = parseVerdict(output);
+    const summary = summarize(output);
+    try {
+      if (verdict === "REGRESSED") {
+        await move(issue.id, BUGS, { status: "confirmed", note: `${AGENT} verification: still broken — reopening.${summary ? "\n" + summary : ""}` });
+        console.log(`  → "${BUGS}" (regressed)`);
+      } else {
+        await move(issue.id, VERIFIED, { status: "verified", note: `Verified by ${AGENT} — fix confirmed.${summary ? "\n" + summary : ""}` });
+        console.log(`  ✓ → "${VERIFIED}"`);
+      }
+    } catch (e) { console.error(`  ✗ ${e.message}`); }
+  }
+}
+
 async function processOnce() {
   if (MODE === "verify" || MODE === "loop") await triageStage();
   if (MODE === "fix" || MODE === "loop") await fixStage();
+  if (MODE === "verify-fix") await verifyFixStage();
 }
 
 const flow =
   MODE === "verify" ? `"${TESTING}" → "${BUGS}" / "${VERIFIED}"`
-  : MODE === "fix" ? `"${BUGS}" → "${FIXING}" → "${VERIFIED}"`
-  : `"${TESTING}" → "${BUGS}" → "${FIXING}" → "${VERIFIED}"`;
+  : MODE === "fix" ? `"${BUGS}" → "${FIXING}" → "${FIXED}"`
+  : MODE === "verify-fix" ? `"${FIXED}" → "${VERIFIED}" / "${BUGS}"`
+  : `"${TESTING}" → "${BUGS}" → "${FIXING}" → "${FIXED}"`;
 console.error(`canflow-agent → ${API} | agent=${AGENT} | mode=${MODE} | ${flow}${BOARD ? ` | board=${BOARD}` : ""}`);
 
 try {

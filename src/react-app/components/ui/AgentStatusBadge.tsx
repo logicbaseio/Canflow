@@ -6,7 +6,8 @@ const AGENT_NAME: Record<string, string> = { claude: 'Claude Code', codex: 'Code
 const STATUS: Record<string, { verb: string; by: string; tone: string }> = {
   confirmed: { verb: 'Confirmed', by: 'by', tone: 'var(--text-muted)' },
   fixing:    { verb: 'Fixing',    by: 'by', tone: 'var(--blue)' },
-  fixed:     { verb: 'Fixed',     by: 'by', tone: 'var(--success)' },
+  fixed:     { verb: 'Fixed',     by: 'by', tone: 'var(--blue)' },
+  verified:  { verb: 'Verified',  by: 'by', tone: 'var(--success)' },
   blocked:   { verb: 'Needs help', by: '·', tone: 'var(--danger)' },
   not_a_bug: { verb: 'Not a bug', by: '·', tone: 'var(--text-muted)' },
 };

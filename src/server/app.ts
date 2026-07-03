@@ -125,11 +125,12 @@ app.post("/boards", zValidator("json", CreateBoardSchema), async (c) => {
         ]
       : data.board_type === "beta-testing"
       ? [
-          { title: "Testing", position: 0, color: "#e0e7ff" },
-          { title: "Issues Identified", position: 1, color: "#fef3c7" },
-          { title: "Fixing", position: 2, color: "#dbeafe" },
-          { title: "Verified", position: 3, color: "#fed7d7" },
-          { title: "Shipped", position: 4, color: "#d1fae5" },
+          { title: "Testing", position: 0, color: "#8b8f96" },
+          { title: "Issues Identified", position: 1, color: "#e5484d" },
+          { title: "Fixing", position: 2, color: "#f5a623" },
+          { title: "Fixed", position: 3, color: "#3b82f6" },
+          { title: "Verified", position: 4, color: "#22c55e" },
+          { title: "Shipped", position: 5, color: "#8b5cf6" },
         ]
       : [
           { title: "To Do", position: 0, color: "#e2e8f0" },
@@ -524,6 +525,7 @@ app.get("/issues", async (c) => {
   const params: unknown[] = [uid];
   let sqlText = `
     SELECT t.id, t.title, t.description, t.priority, t.intensity, t.category, t.image_url,
+           t.agent, t.agent_status, t.agent_note,
            b.id AS board_id, b.title AS board_title, col.id AS column_id, col.title AS phase
     FROM tasks t
     JOIN columns col ON col.id = t.column_id
@@ -542,6 +544,7 @@ app.get("/issues/:id", async (c) => {
   const id = parseInt(c.req.param("id"));
   const row = await one<{ board_id: number }>(
     `SELECT t.id, t.title, t.description, t.priority, t.intensity, t.category, t.image_url,
+            t.agent, t.agent_status, t.agent_note,
             b.id AS board_id, b.title AS board_title, col.id AS column_id, col.title AS phase
      FROM tasks t
      JOIN columns col ON col.id = t.column_id
@@ -582,7 +585,7 @@ app.post("/issues/:id/move", async (c) => {
   const sets = ["column_id = $1"];
   const vals: unknown[] = [target.id];
   let i = 2;
-  if (note) { sets.push(`description = trim(COALESCE(description, '') || $${i++})`); vals.push(`\n\n— 🤖 ${note}`); }
+  if (note) { sets.push(`agent_note = $${i++}`); vals.push(note); }
   if (agent) { sets.push(`agent = $${i++}`); vals.push(agent); }
   if (status) { sets.push(`agent_status = $${i++}`); vals.push(status); }
   sets.push("updated_at = now()");

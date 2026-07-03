@@ -5,10 +5,11 @@ An autonomous **QA loop** for [Canflow](https://canflow.app) beta-testing boards
 ```
 Testing ──(verify: is it a real bug?)──► Issues Identified   (real)
         └─────────────────────────────► Verified          (can't reproduce)
-Issues Identified ──► Fixing ──(implement + self-check)──► Verified
+Issues Identified ──► Fixing ──(implement + self-check)──► Fixed
+Fixed ──(mode verify-fix, optional)──► Verified  |  back to Issues Identified
 ```
 
-`Verified → Shipped` and `Verified → Testing` (still broken) stay with **you**. Every auto-move writes a short 🤖 note on the card explaining what the agent found or changed.
+`Fixed → Verified` and `Verified → Shipped` normally stay with **you** (or run `--mode verify-fix` to let the agent verify fixes). Every auto-move writes a short 🤖 note on the card explaining what the agent found or changed.
 
 ## Usage
 
@@ -35,9 +36,10 @@ npx -y canflow-agent --agent codex --yes
 
 | `--mode` | What it does |
 | --- | --- |
-| `loop` *(default)* | Triage `Testing` **and** fix `Issues Identified` each pass |
+| `loop` *(default)* | Triage `Testing` **and** fix `Issues Identified` each pass (fixes land in `Fixed`) |
 | `verify` | Only triage: `Testing` → `Issues Identified` / `Verified` |
-| `fix` | Only fix: `Issues Identified` → `Fixing` → `Verified` |
+| `fix` | Only fix: `Issues Identified` → `Fixing` → `Fixed` |
+| `verify-fix` | Verify fixes: `Fixed` → `Verified`, or back to `Issues Identified` if regressed |
 
 ## How the verdict works
 
@@ -46,8 +48,10 @@ The agent is asked to end its reply with exactly one line, which the runner read
 ```
 CANFLOW_VERDICT: CONFIRMED   # real bug  → Issues Identified
 CANFLOW_VERDICT: NOT_A_BUG   # can't reproduce → Verified
-CANFLOW_VERDICT: FIXED       # fix applied → Verified
+CANFLOW_VERDICT: FIXED       # fix applied → Fixed
 CANFLOW_VERDICT: BLOCKED     # couldn't fix → stays in Fixing
+CANFLOW_VERDICT: VERIFIED    # fix confirmed → Verified
+CANFLOW_VERDICT: REGRESSED   # still broken → back to Issues Identified
 ```
 
 ## Env
@@ -62,6 +66,7 @@ CANFLOW_VERDICT: BLOCKED     # couldn't fix → stays in Fixing
 | `CANFLOW_TESTING_PHASE` | `Testing` | Column reports come from |
 | `CANFLOW_BUGS_PHASE` | `Issues Identified` | Confirmed bugs |
 | `CANFLOW_FIXING_PHASE` | `Fixing` | In-progress fixes |
+| `CANFLOW_FIXED_PHASE` | `Fixed` | Fix applied, awaiting verification |
 | `CANFLOW_VERIFIED_PHASE` | `Verified` | Awaiting your confirmation |
 
 ## Flags
