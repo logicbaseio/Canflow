@@ -44,3 +44,11 @@ env = { CANFLOW_TOKEN = "cf_your_token" }
 ## License
 
 MIT
+
+## Tools
+
+- **list_issues** `{ phase?, board_id? }` — list issue cards (optionally by phase).
+- **get_issue** `{ id }` — full card details incl. `available_phases`, agent attribution, and the **comments/activity timeline**.
+- **move_issue** `{ id, phase, agent?, status?, note? }` — move a card between phases; auto-logs a system comment and (if `note`) an agent comment.
+- **update_issue_agent** `{ id, agent?, agent_status?, agent_note? }` — set the agent badge (name + status pill) without moving the card. `agent_status`: `working | fixed | blocked | needs-review`.
+- **comment_issue** `{ id, author?, body }` — append a markdown comment to the card's activity timeline (append-only).

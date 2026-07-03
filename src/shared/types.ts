@@ -117,6 +117,15 @@ export const VoteTaskSchema = z.object({
   vote_type: z.enum(['upvote', 'downvote']),
 });
 
+export const IssueCommentSchema = z.object({
+  id: z.number(),
+  author: z.string().nullable(),
+  body: z.string(),
+  is_system: z.boolean().optional(),
+  created_at: z.string(),
+});
+export type IssueComment = z.infer<typeof IssueCommentSchema>;
+
 // Invitation schemas
 export const InvitationSchema = z.object({
   id: z.number(),

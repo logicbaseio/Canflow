@@ -51,6 +51,17 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at  TIMESTAMPTZ DEFAULT now()
 );
 
+-- Append-only activity log / comments on a card (agent write-ups + system phase-change notes + user comments)
+CREATE TABLE IF NOT EXISTS task_comments (
+  id          SERIAL PRIMARY KEY,
+  task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  author      TEXT,               -- agent slug (e.g. 'claude-code', 'codex') or user name; null = system
+  body        TEXT NOT NULL,
+  is_system   BOOLEAN DEFAULT false,  -- true for auto phase-change notes
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id, created_at);
+
 CREATE TABLE IF NOT EXISTS invitations (
   id          SERIAL PRIMARY KEY,
   board_id    INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,

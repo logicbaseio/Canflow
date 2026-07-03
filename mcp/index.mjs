@@ -56,7 +56,7 @@ server.registerTool(
   {
     title: "Get issue",
     description:
-      "Get full details of one Canflow issue by id: title, description, severity/intensity, category, attached screenshot URL, current phase, and the phases it can be moved to.",
+      "Get full details of one Canflow issue by id: title, description, severity/intensity, category, attached screenshot URL, current phase, the phases it can be moved to, the current agent attribution (agent / agent_status / agent_note), and the full comments/activity timeline. Read this before working a card to pick up prior context.",
     inputSchema: { id: z.number() },
   },
   async ({ id }) => ok(await api(`/issues/${id}`))
@@ -72,8 +72,8 @@ server.registerTool(
     inputSchema: {
       id: z.number(),
       phase: z.string(),
-      agent: z.enum(["claude", "codex"]).optional(),
-      status: z.enum(["confirmed", "fixing", "fixed", "verified", "blocked", "not_a_bug"]).optional(),
+      agent: z.string().optional(),
+      status: z.string().optional(),
       note: z.string().optional(),
     },
   },
@@ -83,6 +83,47 @@ server.registerTool(
     if (status) body.status = status;
     if (note) body.note = note;
     return ok(await api(`/issues/${id}/move`, { method: "POST", body: JSON.stringify(body) }));
+  }
+);
+
+server.registerTool(
+  "update_issue_agent",
+  {
+    title: "Update issue agent attribution",
+    description:
+      "Set the coding-agent attribution + status badge on a card WITHOUT moving it. Shows on the board as e.g. \"Working — Claude Code\". Use agent for your identity (e.g. \"claude-code\", \"codex\"), agent_status for the state, and agent_note for a one-line summary of the current state / fix.",
+    inputSchema: {
+      id: z.number(),
+      agent: z.string().optional(),
+      agent_status: z.enum(["working", "fixed", "blocked", "needs-review"]).optional(),
+      agent_note: z.string().optional(),
+    },
+  },
+  async ({ id, agent, agent_status, agent_note }) => {
+    const body = {};
+    if (agent) body.agent = agent;
+    if (agent_status) body.status = agent_status;
+    if (agent_note !== undefined) body.note = agent_note;
+    return ok(await api(`/issues/${id}/agent`, { method: "POST", body: JSON.stringify(body) }));
+  }
+);
+
+server.registerTool(
+  "comment_issue",
+  {
+    title: "Comment on issue",
+    description:
+      "Append a comment to a card's activity timeline (append-only — prior comments are preserved). Use this to record root cause, files changed, verification steps, or a fix summary. Markdown supported. Pass author as your agent identity (e.g. \"claude-code\").",
+    inputSchema: {
+      id: z.number(),
+      author: z.string().optional(),
+      body: z.string(),
+    },
+  },
+  async ({ id, author, body }) => {
+    const payload = { body };
+    if (author) payload.author = author;
+    return ok(await api(`/issues/${id}/comments`, { method: "POST", body: JSON.stringify(payload) }));
   }
 );
 

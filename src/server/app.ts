@@ -78,6 +78,14 @@ async function ownsTask(taskId: number, uid: string): Promise<boolean> {
   ));
 }
 
+function addComment(taskId: number, author: string | null, body: string, isSystem = false) {
+  return query(
+    "INSERT INTO task_comments (task_id, author, body, is_system) VALUES ($1, $2, $3, $4)",
+    [taskId, author, body, isSystem]
+  );
+}
+const cleanAgent = (v: unknown): string => (typeof v === "string" && v.trim() ? v.trim().toLowerCase() : "");
+
 /* ----------------------------- Boards (auth required) ----------------------------- */
 
 app.get("/boards", async (c) => {
@@ -554,7 +562,11 @@ app.get("/issues/:id", async (c) => {
   );
   if (!row) return c.json({ error: "Issue not found" }, 404);
   const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [row.board_id]);
-  return c.json({ ...row, available_phases: phases.map((p) => p.title) });
+  const comments = await query(
+    "SELECT id, author, body, is_system, created_at FROM task_comments WHERE task_id = $1 ORDER BY created_at ASC, id ASC",
+    [id]
+  );
+  return c.json({ ...row, available_phases: phases.map((p) => p.title), comments });
 });
 
 app.post("/issues/:id/move", async (c) => {
@@ -564,20 +576,18 @@ app.post("/issues/:id/move", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const phase = typeof body.phase === "string" ? body.phase.trim() : "";
   const note = typeof body.note === "string" ? body.note.trim() : "";
-  const agent = typeof body.agent === "string" && ["claude", "codex"].includes(body.agent.trim().toLowerCase())
-    ? body.agent.trim().toLowerCase()
-    : "";
+  const agent = cleanAgent(body.agent);
   const status = typeof body.status === "string" ? body.status.trim().toLowerCase() : "";
   if (!phase) return c.json({ error: "phase is required" }, 400);
-  const t = await one<{ board_id: number }>(
-    `SELECT col.board_id FROM tasks t
+  const t = await one<{ board_id: number; current_phase: string }>(
+    `SELECT col.board_id, col.title AS current_phase FROM tasks t
      JOIN columns col ON col.id = t.column_id
      JOIN boards b ON b.id = col.board_id
      WHERE t.id = $1 AND b.owner_id = $2`,
     [id, uid]
   );
   if (!t) return c.json({ error: "Issue not found" }, 404);
-  const target = await one<{ id: number }>("SELECT id FROM columns WHERE board_id = $1 AND lower(title) = lower($2)", [t.board_id, phase]);
+  const target = await one<{ id: number; title: string }>("SELECT id, title FROM columns WHERE board_id = $1 AND lower(title) = lower($2)", [t.board_id, phase]);
   if (!target) {
     const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [t.board_id]);
     return c.json({ error: `Phase "${phase}" not found`, available_phases: phases.map((p) => p.title) }, 400);
@@ -591,7 +601,65 @@ app.post("/issues/:id/move", async (c) => {
   sets.push("updated_at = now()");
   vals.push(id);
   const updated = await one(`UPDATE tasks SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, vals);
+  // Timeline: a system note for the phase change, plus the agent's write-up as a comment.
+  if (t.current_phase.toLowerCase() !== target.title.toLowerCase()) {
+    await addComment(id, agent || null, `Moved **${t.current_phase}** → **${target.title}**`, true);
+  }
+  if (note) await addComment(id, agent || null, note, false);
   return c.json(updated);
+});
+
+// Set agent attribution + status (badge) without moving the card.
+app.post("/issues/:id/agent", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  if (!(await ownsTask(id, uid))) return c.json({ error: "Issue not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const agent = cleanAgent(body.agent);
+  const status = typeof body.status === "string" ? body.status.trim().toLowerCase() : undefined;
+  const note = typeof body.note === "string" ? body.note.trim() : undefined;
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+  if (agent) { sets.push(`agent = $${i++}`); vals.push(agent); }
+  if (status !== undefined) { sets.push(`agent_status = $${i++}`); vals.push(status || null); }
+  if (note !== undefined) { sets.push(`agent_note = $${i++}`); vals.push(note || null); }
+  if (!sets.length) return c.json({ error: "Provide at least one of agent, status, note" }, 400);
+  sets.push("updated_at = now()");
+  vals.push(id);
+  const updated = await one(`UPDATE tasks SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, vals);
+  return c.json(updated);
+});
+
+// Read the activity log / comments for a card.
+app.get("/issues/:id/comments", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  if (!(await ownsTask(id, uid))) return c.json({ error: "Issue not found" }, 404);
+  const comments = await query(
+    "SELECT id, author, body, is_system, created_at FROM task_comments WHERE task_id = $1 ORDER BY created_at ASC, id ASC",
+    [id]
+  );
+  return c.json(comments);
+});
+
+// Append a comment to a card's activity log.
+app.post("/issues/:id/comments", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  if (!(await ownsTask(id, uid))) return c.json({ error: "Issue not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const text = typeof body.body === "string" ? body.body.trim() : "";
+  const author = typeof body.author === "string" && body.author.trim() ? body.author.trim() : null;
+  if (!text) return c.json({ error: "body is required" }, 400);
+  const row = await one(
+    "INSERT INTO task_comments (task_id, author, body, is_system) VALUES ($1, $2, $3, false) RETURNING id, author, body, is_system, created_at",
+    [id, author, text]
+  );
+  return c.json(row, 201);
 });
 
 /* ----------------------------- GitHub bridge ----------------------------- */

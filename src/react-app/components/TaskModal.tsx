@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { X, ImagePlus, Loader2, Trash2, Send } from 'lucide-react';
+import { format } from 'date-fns';
 import Select from '@/react-app/components/ui/Select';
 import DatePicker from '@/react-app/components/ui/DatePicker';
 import { AgentStatusBadge } from '@/react-app/components/ui/AgentStatusBadge';
-import type { Task, CreateTask, UpdateTask } from '@/shared/types';
+import { agentIdentity } from '@/react-app/components/ui/AgentLogos';
+import { authedFetch, useSession } from '@/react-app/lib/auth';
+import type { Task, CreateTask, UpdateTask, IssueComment } from '@/shared/types';
 
 interface TaskModalProps {
   task?: Task | null;
@@ -58,6 +61,45 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
   const [imgLoading, setImgLoading] = useState(false);
   const [imgError, setImgError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { data: session } = useSession();
+  const userName = session?.user?.name || session?.user?.email || 'You';
+
+  const [comments, setComments] = useState<IssueComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [posting, setPosting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !task?.id) { setComments([]); return; }
+    setLoadingComments(true);
+    authedFetch(`/api/issues/${task.id}/comments`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setComments(Array.isArray(d) ? d : []))
+      .catch(() => setComments([]))
+      .finally(() => setLoadingComments(false));
+    setNewComment('');
+  }, [isOpen, task?.id]);
+
+  const postComment = async () => {
+    if (!task?.id || !newComment.trim()) return;
+    setPosting(true);
+    try {
+      const res = await authedFetch(`/api/issues/${task.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author: userName, body: newComment.trim() }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setComments((c) => [...c, created]);
+        setNewComment('');
+      }
+    } catch (e) {
+      console.error('Failed to post comment:', e);
+    } finally {
+      setPosting(false);
+    }
+  };
 
   useEffect(() => {
     setImgError(null);
@@ -136,18 +178,6 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
-          {task?.agent && (
-            <div className="rounded-lg border border-line bg-surface-2 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Agent activity</span>
-                <AgentStatusBadge agent={task.agent} status={task.agent_status} />
-              </div>
-              {task.agent_note && (
-                <p className="mt-2 text-[12.5px] leading-relaxed text-ink-muted whitespace-pre-wrap">{task.agent_note}</p>
-              )}
-            </div>
-          )}
-
           <Field label={`${taskLabel} title`}>
             <input
               type="text"
@@ -272,6 +302,49 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
             {imgError && <p className="mt-1.5 text-[12px] text-danger">{imgError}</p>}
           </div>
 
+          {task && (
+            <div className="border-t border-line pt-4">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Activity</span>
+                {task.agent && <AgentStatusBadge agent={task.agent} status={task.agent_status} />}
+              </div>
+
+              {task.agent_note && (
+                <p className="mb-3 rounded-md bg-surface-2 px-2.5 py-2 text-[12.5px] leading-relaxed text-ink-muted whitespace-pre-wrap">{task.agent_note}</p>
+              )}
+
+              {loadingComments ? (
+                <div className="flex items-center gap-2 text-[12px] text-ink-subtle"><Loader2 size={14} className="animate-spin" /> Loading activity…</div>
+              ) : comments.length > 0 ? (
+                <ul className="space-y-2.5">
+                  {comments.map((cm) => <CommentRow key={cm.id} comment={cm} />)}
+                </ul>
+              ) : (
+                <p className="text-[12px] text-ink-subtle">No activity yet.</p>
+              )}
+
+              <div className="mt-3 flex items-end gap-2">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); postComment(); } }}
+                  rows={2}
+                  className="field resize-none text-[12.5px]"
+                  placeholder="Add a comment…"
+                />
+                <button
+                  type="button"
+                  onClick={postComment}
+                  disabled={!newComment.trim() || posting}
+                  className="btn btn-outline h-9 w-9 p-0 shrink-0"
+                  title="Comment (⌘↵)"
+                >
+                  {posting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn btn-outline flex-1 h-9">Cancel</button>
             <button type="submit" className="btn btn-primary flex-1 h-9">{task ? 'Save changes' : `Create ${taskLabel.toLowerCase()}`}</button>
@@ -288,5 +361,53 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1.5 block text-[12px] font-medium text-ink-muted">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Minimal inline renderer for **bold** (used by system phase-change notes and agent write-ups). */
+function renderBody(text: string): React.ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i} className="font-semibold text-ink">{part.slice(2, -2)}</strong>
+      : <span key={i}>{part}</span>
+  );
+}
+
+function fmtTime(iso: string): string {
+  try { return format(new Date(iso), 'MMM d, HH:mm'); } catch { return ''; }
+}
+
+function CommentRow({ comment }: { comment: IssueComment }) {
+  const when = fmtTime(comment.created_at);
+
+  if (comment.is_system) {
+    return (
+      <li className="flex items-center gap-2 text-[11.5px] text-ink-subtle">
+        <span className="h-1 w-1 rounded-full shrink-0" style={{ backgroundColor: 'var(--border-strong)' }} />
+        <span className="whitespace-pre-wrap">{renderBody(comment.body)}</span>
+        {when && <span className="opacity-70">· {when}</span>}
+      </li>
+    );
+  }
+
+  const isKnownAgent = /claude|codex|openai|gpt/i.test(comment.author ?? '');
+  const { name, Logo } = agentIdentity(comment.author);
+  const displayName = comment.author ? (isKnownAgent ? name : comment.author) : 'You';
+
+  return (
+    <li className="flex gap-2">
+      <span className="mt-0.5 h-5 w-5 rounded-full bg-surface-2 border border-line flex items-center justify-center shrink-0 overflow-hidden">
+        {isKnownAgent
+          ? <Logo className="h-3.5 w-3.5" />
+          : <span className="text-[10px] font-semibold text-ink-muted">{displayName.charAt(0).toUpperCase()}</span>}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-[11.5px]">
+          <span className="font-medium text-ink truncate">{displayName}</span>
+          {when && <span className="text-ink-subtle shrink-0">{when}</span>}
+        </div>
+        <p className="text-[12.5px] leading-relaxed text-ink-muted whitespace-pre-wrap break-words">{renderBody(comment.body)}</p>
+      </div>
+    </li>
   );
 }
