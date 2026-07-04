@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
   trial_ends_at TIMESTAMPTZ,           -- during trial the account is treated as Pro
   agent_month   TEXT,                  -- 'YYYY-MM' current metering period
   agent_count   INTEGER DEFAULT 0,     -- agent actions used this period (free-plan meter)
+  stripe_customer_id     TEXT,
+  stripe_subscription_id TEXT,
+  subscription_status    TEXT,          -- Stripe subscription status
   updated_at    TIMESTAMPTZ DEFAULT now()
 );
 

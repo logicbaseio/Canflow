@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X, Check, Sparkles, Loader2 } from 'lucide-react';
+import { useSession, authedFetch } from '@/react-app/lib/auth';
 
 const PRO_FEATURES = [
   'Unlimited boards',
@@ -18,10 +19,11 @@ interface UpgradeModalProps {
 }
 
 export default function UpgradeModal({ isOpen, onClose, reason, price = 7 }: UpgradeModalProps) {
+  const { data: session } = useSession();
   const [pending, setPending] = useState(false);
-  const [notified, setNotified] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => { if (isOpen) { setPending(false); setNotified(false); } }, [isOpen]);
+  useEffect(() => { if (isOpen) { setPending(false); setNotice(null); } }, [isOpen]);
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -31,10 +33,23 @@ export default function UpgradeModal({ isOpen, onClose, reason, price = 7 }: Upg
 
   if (!isOpen) return null;
 
-  // Payments are wired up separately (Stripe). For now, register interest.
-  const upgrade = () => {
+  const upgrade = async () => {
     setPending(true);
-    setTimeout(() => { setPending(false); setNotified(true); }, 600);
+    setNotice(null);
+    try {
+      const res = await authedFetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: session?.user?.email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) { window.location.href = data.url; return; }
+      if (res.status === 503) setNotice("Card payments launch shortly — we'll email you the moment Pro is live.");
+      else setNotice(data.error || 'Could not start checkout. Please try again.');
+    } catch {
+      setNotice('Could not start checkout. Please try again.');
+    }
+    setPending(false);
   };
 
   return (
@@ -66,17 +81,17 @@ export default function UpgradeModal({ isOpen, onClose, reason, price = 7 }: Upg
             ))}
           </ul>
 
-          {notified ? (
+          {notice ? (
             <div className="rounded-md border border-line bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-muted flex items-center gap-2">
               <Check size={15} className="text-success shrink-0" />
-              Thanks! Card payments launch shortly — we'll email you the moment Pro is live.
+              {notice}
             </div>
           ) : (
             <button onClick={upgrade} disabled={pending} className="btn btn-primary w-full h-10">
               {pending ? <Loader2 size={16} className="animate-spin" /> : `Upgrade to Pro — $${price}/mo`}
             </button>
           )}
-          <p className="text-center text-[11px] text-ink-subtle">Cancel anytime. Your data stays yours.</p>
+          <p className="text-center text-[11px] text-ink-subtle">Secure checkout via Stripe · cancel anytime.</p>
         </div>
       </div>
     </div>

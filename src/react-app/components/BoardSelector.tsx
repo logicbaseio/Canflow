@@ -59,6 +59,18 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
   }, []);
   useEffect(() => { loadOrg(); }, [loadOrg]);
 
+  // Return from Stripe Checkout.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('billing') === 'success') {
+      celebrate();
+      toast('Welcome to Pro! 🎉 Your subscription is active.');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('billing') === 'cancel') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
+
   const handleCreateBoard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBoardTitle.trim()) return;

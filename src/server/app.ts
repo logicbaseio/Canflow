@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import type { Context } from "hono";
+import { stripeFetch, verifyStripeEvent } from "./stripe";
 import {
   CreateBoardSchema,
   UpdateBoardSchema,
@@ -525,6 +526,10 @@ app.get("/plan", async (c) => {
     [uid]
   );
   const agentUsed = s.agent_month === currentMonth() ? (s.agent_count ?? 0) : 0;
+  const billing = await one<{ stripe_customer_id: string | null; subscription_status: string | null }>(
+    "SELECT stripe_customer_id, subscription_status FROM user_settings WHERE user_id = $1",
+    [uid]
+  );
   return c.json({
     plan,
     trialing,
@@ -532,7 +537,94 @@ app.get("/plan", async (c) => {
     limits: FREE,
     usage: { boards: boards?.n ?? 0, testers: testers?.n ?? 0, agentActions: agentUsed },
     price: { pro_monthly: 7 },
+    manageable: !!billing?.stripe_customer_id,
+    subscription_status: billing?.subscription_status ?? null,
+    billing_enabled: !!process.env.STRIPE_SECRET_KEY,
   });
+});
+
+/* ----------------------------- Stripe billing ----------------------------- */
+
+const stripeKey = () => process.env.STRIPE_SECRET_KEY || "";
+const stripePrice = () => process.env.STRIPE_PRICE_ID || "";
+
+// Start a Stripe Checkout session for a Pro subscription; returns the hosted checkout URL.
+app.post("/billing/checkout", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  if (!stripeKey() || !stripePrice()) return c.json({ error: "Billing isn't configured yet." }, 503);
+  await ensureSettings(uid);
+  const body = await c.req.json().catch(() => ({}));
+  const email = typeof body.email === "string" && body.email.trim() ? body.email.trim() : undefined;
+  const origin = new URL(c.req.url).origin;
+  try {
+    let s = await one<{ stripe_customer_id: string | null }>("SELECT stripe_customer_id FROM user_settings WHERE user_id = $1", [uid]);
+    let customer = s?.stripe_customer_id ?? "";
+    if (!customer) {
+      const cust = await stripeFetch(stripeKey(), "customers", { email, "metadata[uid]": uid });
+      customer = cust.id;
+      await query("UPDATE user_settings SET stripe_customer_id = $1, updated_at = now() WHERE user_id = $2", [customer, uid]);
+    }
+    const session = await stripeFetch(stripeKey(), "checkout/sessions", {
+      mode: "subscription",
+      customer,
+      "line_items[0][price]": stripePrice(),
+      "line_items[0][quantity]": 1,
+      success_url: `${origin}/?billing=success`,
+      cancel_url: `${origin}/?billing=cancel`,
+      client_reference_id: uid,
+      "subscription_data[metadata][uid]": uid,
+      allow_promotion_codes: "true",
+    });
+    return c.json({ url: session.url });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "Checkout failed" }, 500);
+  }
+});
+
+// Open the Stripe billing portal (manage / cancel subscription).
+app.post("/billing/portal", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  if (!stripeKey()) return c.json({ error: "Billing isn't configured yet." }, 503);
+  const s = await one<{ stripe_customer_id: string | null }>("SELECT stripe_customer_id FROM user_settings WHERE user_id = $1", [uid]);
+  if (!s?.stripe_customer_id) return c.json({ error: "No billing account yet." }, 400);
+  const origin = new URL(c.req.url).origin;
+  try {
+    const session = await stripeFetch(stripeKey(), "billing_portal/sessions", { customer: s.stripe_customer_id, return_url: `${origin}/` });
+    return c.json({ url: session.url });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "Could not open billing portal" }, 500);
+  }
+});
+
+// Stripe webhook — the source of truth for subscription state. No user auth (Stripe-signed).
+app.post("/billing/webhook", async (c) => {
+  const raw = await c.req.text();
+  const sig = c.req.header("stripe-signature") || "";
+  let event: { type: string; data: { object: Record<string, unknown> } };
+  try {
+    event = await verifyStripeEvent(raw, sig, process.env.STRIPE_WEBHOOK_SECRET || "");
+  } catch {
+    return c.json({ error: "Invalid signature" }, 400);
+  }
+  const obj = event.data.object as Record<string, string>;
+  if (event.type === "checkout.session.completed") {
+    const uid = obj.client_reference_id;
+    if (uid) {
+      await query(
+        "UPDATE user_settings SET plan = 'pro', stripe_customer_id = $1, stripe_subscription_id = $2, subscription_status = 'active', updated_at = now() WHERE user_id = $3",
+        [obj.customer, obj.subscription, uid]
+      );
+    }
+  } else if (event.type === "customer.subscription.updated") {
+    const status = obj.status;
+    const plan = ["active", "trialing", "past_due"].includes(status) ? "pro" : "free";
+    await query("UPDATE user_settings SET plan = $1, subscription_status = $2, updated_at = now() WHERE stripe_customer_id = $3", [plan, status, obj.customer]);
+  } else if (event.type === "customer.subscription.deleted") {
+    await query("UPDATE user_settings SET plan = 'free', subscription_status = 'canceled', updated_at = now() WHERE stripe_customer_id = $1", [obj.customer]);
+  }
+  return c.json({ received: true });
 });
 
 /* ----------------------------- Settings + team (auth required) ----------------------------- */

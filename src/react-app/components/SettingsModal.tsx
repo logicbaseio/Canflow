@@ -19,6 +19,9 @@ interface PlanInfo {
   limits: { boards: number; testers: number; agentActions: number; historyDays: number };
   usage: { boards: number; testers: number; agentActions: number };
   price: { pro_monthly: number };
+  manageable?: boolean;
+  subscription_status?: string | null;
+  billing_enabled?: boolean;
 }
 
 interface InviteRow {
@@ -536,6 +539,14 @@ function BillingTab({ plan, onUpgrade }: { plan: PlanInfo | null; onUpgrade: () 
     ? Math.max(0, Math.ceil((new Date(plan.trial_ends_at).getTime() - Date.now()) / 86_400_000))
     : 0;
 
+  const manageBilling = async () => {
+    try {
+      const res = await authedFetch('/api/billing/portal', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) window.location.href = data.url;
+    } catch (e) { console.error('portal failed', e); }
+  };
+
   const Meter = ({ label, used, limit }: { label: string; used: number; limit: number }) => {
     const pct = isPro ? 0 : Math.min(100, Math.round((used / limit) * 100));
     const near = !isPro && used >= limit;
@@ -574,11 +585,13 @@ function BillingTab({ plan, onUpgrade }: { plan: PlanInfo | null; onUpgrade: () 
                 : isPro ? `Thanks for supporting Canflow 💛` : `Everything you need to try Canflow — with limits.`}
             </p>
           </div>
-          {!isPro && (
+          {!isPro ? (
             <button onClick={onUpgrade} className="btn btn-primary h-9 px-4 shrink-0">
               <Sparkles size={15} /> Upgrade — ${plan.price.pro_monthly}/mo
             </button>
-          )}
+          ) : plan.manageable ? (
+            <button onClick={manageBilling} className="btn btn-outline h-9 px-4 shrink-0">Manage billing</button>
+          ) : null}
         </div>
       </div>
 
