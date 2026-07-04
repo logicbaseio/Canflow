@@ -650,7 +650,7 @@ app.post("/auth/email", async (c) => {
   const evt = await c.req.json().catch(() => null);
   if (!evt) return c.json({ error: "Bad payload" }, 400);
   const mail = buildAuthEmail(evt);
-  if (!mail) return c.json({ received: true, skipped: true }); // unknown/irrelevant event → ack
+  if (!mail) return c.json({ received: true, skipped: true }); // unrelated event → ack
   const from = process.env.RESEND_FROM || "Canflow <noreply@canflow.app>";
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

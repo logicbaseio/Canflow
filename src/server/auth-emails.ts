@@ -1,16 +1,19 @@
 // Branded HTML emails for Neon Auth events (send.otp / send.magic_link),
 // delivered through Resend so verification & password-reset emails are on-brand.
 
+type EventData = {
+  otp_code?: string;
+  otp_type?: string;   // 'sign-in' | 'email-verification' | 'forget-password'
+  link_url?: string;
+  link_type?: string;  // 'sign-in' | 'email-verification' | 'forget-password'
+  expires_at?: string;
+};
 type NeonAuthEvent = {
-  type?: string;
+  event_type?: string; // Neon uses "event_type" (e.g. "send.otp" / "send.magic_link")
+  type?: string;       // fallback
   user?: { email?: string; name?: string };
-  event_data?: {
-    otp_code?: string;
-    otp_type?: string;   // 'sign-in' | 'email-verification' | 'forget-password'
-    link_url?: string;
-    link_type?: string;  // 'sign-in' | 'email-verification' | 'forget-password'
-    expires_at?: string;
-  };
+  event_data?: EventData;
+  data?: EventData;    // fallback
 };
 
 function expiresIn(iso?: string): string {
@@ -58,10 +61,11 @@ const COPY: Record<string, { title: string; sub: string; cta: string; subject: s
 
 export function buildAuthEmail(evt: NeonAuthEvent): { to: string; subject: string; html: string } | null {
   const to = evt.user?.email;
-  const d = evt.event_data || {};
+  const type = evt.event_type || evt.type;
+  const d = evt.event_data || evt.data || {};
   if (!to) return null;
 
-  if (evt.type === "send.otp" && d.otp_code) {
+  if (type === "send.otp" && d.otp_code) {
     const c = COPY[d.otp_type || "sign-in"] || COPY["sign-in"];
     const subLine = d.otp_type === "email-verification"
       ? "Enter this code to confirm your email and finish setting up Canflow."
@@ -71,7 +75,7 @@ export function buildAuthEmail(evt: NeonAuthEvent): { to: string; subject: strin
     return { to, subject: c.subject, html: shell(h1(c.title) + sub(subLine) + codeBlock(d.otp_code) + foot(d.expires_at)) };
   }
 
-  if (evt.type === "send.magic_link" && d.link_url) {
+  if (type === "send.magic_link" && d.link_url) {
     const c = COPY[d.link_type || "sign-in"] || COPY["sign-in"];
     return { to, subject: c.subject, html: shell(h1(c.title) + sub(c.sub) + button(d.link_url, c.cta) + foot(d.expires_at)) };
   }
