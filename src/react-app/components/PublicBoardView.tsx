@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Share2, Globe, ArrowUp, ArrowDown } from 'lucide-react';
+import ShareBoardModal from './ShareBoardModal';
 import type { BoardWithColumns } from '@/shared/types';
 
 interface PublicBoardViewProps {
   publicKey: string;
 }
 
+type PublicBoard = BoardWithColumns & { org?: { name: string | null; image: string | null } };
+
 export default function PublicBoardView({ publicKey }: PublicBoardViewProps) {
-  const [board, setBoard] = useState<BoardWithColumns | null>(null);
+  const [board, setBoard] = useState<PublicBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [votingTasks, setVotingTasks] = useState<Set<number>>(new Set());
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     fetchBoard();
@@ -82,14 +86,6 @@ export default function PublicBoardView({ publicKey }: PublicBoardViewProps) {
     }
   };
 
-  const copyPublicLink = () => {
-    const url = `${window.location.origin}/public/${publicKey}`;
-    navigator.clipboard.writeText(url);
-    // Could add a toast notification here
-  };
-
-
-
   if (loading) {
     return (
       <div className="min-h-screen bg-app text-ink flex items-center justify-center px-6">
@@ -115,31 +111,57 @@ export default function PublicBoardView({ publicKey }: PublicBoardViewProps) {
   }
 
   const isRoadmap = board.board_type === 'roadmap';
+  const org = board.org || { name: null, image: null };
+  const shareUrl = `${window.location.origin}/public/${publicKey}`;
 
   return (
     <div className="min-h-screen bg-app text-ink">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-6 h-14 border-b border-line">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{board.title}</h1>
-          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-brand">
-            <Globe size={13} />
-            Public board
-          </span>
+      {/* Canflow marketing nav */}
+      <header className="sticky top-0 z-10 flex items-center justify-between px-6 h-12 border-b border-line bg-app/90 backdrop-blur-sm">
+        <a href="https://canflow.app" target="_blank" rel="noreferrer" className="flex items-center gap-2 shrink-0">
+          <Logo className="h-[18px] w-[18px]" />
+          <span className="text-[13.5px] font-semibold tracking-tight text-ink">Canflow</span>
+        </a>
+        <div className="flex items-center gap-2">
+          <a href="https://boards.canflow.app" target="_blank" rel="noreferrer" className="hidden sm:inline-flex items-center h-8 px-3 rounded-lg text-[12.5px] font-medium text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
+            Create your own roadmap →
+          </a>
+          <button onClick={() => setShareOpen(true)} className="btn btn-outline h-8 px-3">
+            <Share2 size={15} /> Share
+          </button>
         </div>
-        <button onClick={copyPublicLink} className="btn btn-outline h-8 px-3">
-          <Share2 size={15} /> Share
-        </button>
       </header>
 
+      {/* Board owner's brand + title */}
+      <div className="px-6 pt-6 pb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          {org.image && (
+            <img src={org.image} alt="" className="h-10 w-10 rounded-lg object-cover border border-line shrink-0" />
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              {org.name && <span className="text-[13.5px] font-semibold text-ink">{org.name}</span>}
+              {org.name && <span className="text-ink-subtle">·</span>}
+              <h1 className="text-[19px] font-semibold tracking-tight text-ink truncate">{board.title}</h1>
+              <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-brand">
+                <Globe size={12} /> Public {isRoadmap ? 'roadmap' : 'board'}
+              </span>
+            </div>
+            {board.description && <p className="mt-0.5 text-[12.5px] text-ink-muted truncate">{board.description}</p>}
+          </div>
+        </div>
+      </div>
+
       {/* Board Content */}
-      <div className="px-6 py-5">
+      <div className="px-6 pb-8">
         {isRoadmap ? (
           <RoadmapPublicView board={board} onVote={handleVote} votingTasks={votingTasks} />
         ) : (
           <KanbanPublicView board={board} onVote={handleVote} votingTasks={votingTasks} />
         )}
       </div>
+
+      <ShareBoardModal url={shareUrl} title={`${board.title} — ${isRoadmap ? 'roadmap' : 'board'}`} isOpen={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

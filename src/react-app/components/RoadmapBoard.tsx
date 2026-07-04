@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Plus, Share2, Globe, Eye, Copy, ArrowUp, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import TaskModal from './TaskModal';
+import ShareBoardModal from './ShareBoardModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import PendingCard from '@/react-app/components/ui/PendingCard';
 import { useDialog } from '@/react-app/components/ui/Dialog';
+import { celebrate } from '@/react-app/lib/confetti';
 import { useBoard, createTask, updateTask, createColumn, updateColumn, deleteColumn, updateBoard } from '@/react-app/hooks/useApi';
 import type { Task, Column, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
 
@@ -28,6 +30,9 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
   const [showPublicMenu, setShowPublicMenu] = useState(false);
   const [columnMenu, setColumnMenu] = useState<number | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  const publicUrl = board?.public_key ? `${window.location.origin}/public/${board.public_key}` : '';
 
   const handleAddTask = (columnId: number) => {
     setNewTaskColumnId(columnId);
@@ -83,9 +88,15 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
 
   const handleTogglePublic = async () => {
     if (!board) return;
+    const makingPublic = !board.is_public;
+    setShowPublicMenu(false);
     try {
-      await updateBoard(board.id, { is_public: !board.is_public });
-      refetch();
+      await updateBoard(board.id, { is_public: makingPublic });
+      await refetch();
+      if (makingPublic) {
+        celebrate();          // 🎉 it's live
+        setShareOpen(true);   // show the share modal with URL + social buttons
+      }
     } catch (error) {
       console.error('Failed to toggle board visibility:', error);
     }
@@ -145,10 +156,16 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
                     {board.is_public ? 'Make private' : 'Make public'}
                   </button>
                   {!!board.is_public && board.public_key && (
-                    <button onClick={copyPublicLink} className="menu-item text-brand">
-                      <Copy size={14} />
-                      Copy share link
-                    </button>
+                    <>
+                      <button onClick={() => { setShowPublicMenu(false); setShareOpen(true); }} className="menu-item text-brand">
+                        <Share2 size={14} />
+                        Share…
+                      </button>
+                      <button onClick={copyPublicLink} className="menu-item">
+                        <Copy size={14} />
+                        Copy share link
+                      </button>
+                    </>
                   )}
 
                   {!!board.is_public && (
@@ -288,6 +305,8 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
         }}
         onSave={handleTaskSave}
       />
+
+      <ShareBoardModal url={publicUrl} title={`${board.title} — roadmap`} isOpen={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

@@ -325,7 +325,7 @@ app.delete("/tasks/:id", async (c) => {
 
 app.get("/public/:publicKey", async (c) => {
   const publicKey = c.req.param("publicKey");
-  const board = await one<Board>("SELECT * FROM boards WHERE public_key = $1 AND is_public = TRUE", [publicKey]);
+  const board = await one<Board & { owner_id: string }>("SELECT * FROM boards WHERE public_key = $1 AND is_public = TRUE", [publicKey]);
   if (!board) return c.json({ error: "Board not found or not public" }, 404);
   const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [board.id]);
   const boardWithColumns: BoardWithColumns = { ...board, columns: [] };
@@ -333,7 +333,12 @@ app.get("/public/:publicKey", async (c) => {
     const tasks = await query<Task>("SELECT * FROM tasks WHERE column_id = $1 ORDER BY position", [column.id]);
     boardWithColumns.columns.push({ ...column, tasks });
   }
-  return c.json(boardWithColumns);
+  // Owner's org branding, so their logo/name shows on the public board.
+  const settings = await one<{ org_name: string | null; org_image: string | null }>(
+    "SELECT org_name, org_image FROM user_settings WHERE user_id = $1",
+    [board.owner_id]
+  );
+  return c.json({ ...boardWithColumns, org: { name: settings?.org_name ?? null, image: settings?.org_image ?? null } });
 });
 
 app.post("/public/:publicKey/tasks/:id/vote", zValidator("json", VoteTaskSchema), async (c) => {
