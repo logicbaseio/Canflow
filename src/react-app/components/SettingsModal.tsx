@@ -1,15 +1,25 @@
 import { useEffect, useState } from 'react';
-import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key, RefreshCw, Github, LogOut } from 'lucide-react';
+import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key, RefreshCw, Github, LogOut, CreditCard, Sparkles } from 'lucide-react';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 import AvatarUpload from '@/react-app/components/ui/AvatarUpload';
+import UpgradeModal from '@/react-app/components/UpgradeModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type Tab = 'profile' | 'organization' | 'members' | 'developer';
+type Tab = 'profile' | 'organization' | 'members' | 'billing' | 'developer';
+
+interface PlanInfo {
+  plan: 'free' | 'pro';
+  trialing: boolean;
+  trial_ends_at: string | null;
+  limits: { boards: number; testers: number; agentActions: number; historyDays: number };
+  usage: { boards: number; testers: number; agentActions: number };
+  price: { pro_monthly: number };
+}
 
 interface InviteRow {
   id: number;
@@ -32,6 +42,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; title: string; subt
   { id: 'profile', label: 'Profile', icon: <UserIcon size={16} />, title: 'Profile', subtitle: 'Your account details.' },
   { id: 'organization', label: 'Organization', icon: <Building2 size={16} />, title: 'Organization', subtitle: 'Name your workspace.' },
   { id: 'members', label: 'Members', icon: <Users size={16} />, title: 'Members', subtitle: 'People with access and invited testers.' },
+  { id: 'billing', label: 'Billing', icon: <CreditCard size={16} />, title: 'Plan & billing', subtitle: 'Your plan, usage, and upgrades.' },
   { id: 'developer', label: 'Developer', icon: <Terminal size={16} />, title: 'Developer', subtitle: 'Connect Claude Code or Codex to work your issues over MCP.' },
 ];
 
@@ -58,6 +69,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [githubToken, setGithubToken] = useState('');
   const [savingGithub, setSavingGithub] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
+  const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -78,6 +91,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setGithubToken('');
     setGithubError(null);
     authedFetch('/api/github').then((r) => r.json()).then((d) => setGithubConnected(!!d?.connected)).catch(() => {});
+    authedFetch('/api/plan').then((r) => r.json()).then((d) => setPlanInfo(d)).catch(() => {});
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const connectGithub = async () => {
@@ -373,6 +387,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </div>
             )}
 
+            {tab === 'billing' && (
+              <BillingTab plan={planInfo} onUpgrade={() => setUpgradeOpen(true)} />
+            )}
+
             {tab === 'developer' && (
               <div className="space-y-7">
                 <div>
@@ -502,6 +520,81 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             )}
           </div>
         </div>
+      </div>
+
+      <UpgradeModal isOpen={upgradeOpen} onClose={() => setUpgradeOpen(false)} price={planInfo?.price?.pro_monthly ?? 7} />
+    </div>
+  );
+}
+
+function BillingTab({ plan, onUpgrade }: { plan: PlanInfo | null; onUpgrade: () => void }) {
+  if (!plan) {
+    return <div className="flex items-center gap-2 text-[13px] text-ink-muted"><Loader2 size={15} className="animate-spin" /> Loading plan…</div>;
+  }
+  const isPro = plan.plan === 'pro';
+  const trialDays = plan.trialing && plan.trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(plan.trial_ends_at).getTime() - Date.now()) / 86_400_000))
+    : 0;
+
+  const Meter = ({ label, used, limit }: { label: string; used: number; limit: number }) => {
+    const pct = isPro ? 0 : Math.min(100, Math.round((used / limit) * 100));
+    const near = !isPro && used >= limit;
+    return (
+      <div>
+        <div className="flex items-center justify-between text-[12.5px] mb-1">
+          <span className="text-ink-muted">{label}</span>
+          <span className="tabular-nums text-ink">{used}{isPro ? '' : ` / ${limit}`}{isPro && <span className="text-ink-subtle"> · Unlimited</span>}</span>
+        </div>
+        {!isPro && (
+          <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: near ? 'var(--danger)' : 'var(--accent)' }} />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6 max-w-xl">
+      {/* Current plan */}
+      <div className="card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] font-semibold text-ink">{isPro ? 'Pro' : 'Free'}</span>
+              {plan.trialing && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-ink">
+                  <Sparkles size={11} className="text-brand" /> Trial · {trialDays} {trialDays === 1 ? 'day' : 'days'} left
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-[12.5px] text-ink-subtle">
+              {plan.trialing
+                ? `You're on the Pro trial. Upgrade to keep Pro after it ends.`
+                : isPro ? `Thanks for supporting Canflow 💛` : `Everything you need to try Canflow — with limits.`}
+            </p>
+          </div>
+          {!isPro && (
+            <button onClick={onUpgrade} className="btn btn-primary h-9 px-4 shrink-0">
+              <Sparkles size={15} /> Upgrade — ${plan.price.pro_monthly}/mo
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Usage */}
+      <div>
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Usage this month</p>
+        <div className="space-y-3.5">
+          <Meter label="Boards" used={plan.usage.boards} limit={plan.limits.boards} />
+          <Meter label="Beta testers" used={plan.usage.testers} limit={plan.limits.testers} />
+          <Meter label="Agent actions" used={plan.usage.agentActions} limit={plan.limits.agentActions} />
+        </div>
+        {!isPro && (
+          <p className="mt-3 text-[11.5px] text-ink-subtle">
+            Free includes {plan.limits.historyDays}-day activity history. GitHub bridge and full history are Pro features.
+          </p>
+        )}
       </div>
     </div>
   );

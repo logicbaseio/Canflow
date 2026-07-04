@@ -84,10 +84,14 @@ CREATE TABLE IF NOT EXISTS beta_categories (
 );
 
 CREATE TABLE IF NOT EXISTS user_settings (
-  user_id     TEXT PRIMARY KEY,
-  org_name    TEXT,
-  org_image   TEXT,   -- organization logo (data URL)
-  updated_at  TIMESTAMPTZ DEFAULT now()
+  user_id       TEXT PRIMARY KEY,
+  org_name      TEXT,
+  org_image     TEXT,   -- organization logo (data URL)
+  plan          TEXT DEFAULT 'free',   -- 'free' | 'pro'
+  trial_ends_at TIMESTAMPTZ,           -- during trial the account is treated as Pro
+  agent_month   TEXT,                  -- 'YYYY-MM' current metering period
+  agent_count   INTEGER DEFAULT 0,     -- agent actions used this period (free-plan meter)
+  updated_at    TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS api_tokens (

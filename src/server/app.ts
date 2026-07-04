@@ -86,6 +86,46 @@ function addComment(taskId: number, author: string | null, body: string, isSyste
 }
 const cleanAgent = (v: unknown): string => (typeof v === "string" && v.trim() ? v.trim().toLowerCase() : "");
 
+/* ----------------------------- Plans & limits ----------------------------- */
+
+const FREE = { boards: 2, testers: 3, agentActions: 30, historyDays: 14 };
+
+type PlanRow = { plan: string | null; trial_ends_at: string | null; agent_month: string | null; agent_count: number | null };
+
+// Load the account's plan row, creating it (and starting a 14-day trial) on first touch.
+async function ensureSettings(uid: string): Promise<PlanRow> {
+  const existing = await one<PlanRow>("SELECT plan, trial_ends_at, agent_month, agent_count FROM user_settings WHERE user_id = $1", [uid]);
+  if (existing) return existing;
+  const created = await one<PlanRow>(
+    `INSERT INTO user_settings (user_id, trial_ends_at, updated_at) VALUES ($1, now() + interval '14 days', now())
+     ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
+     RETURNING plan, trial_ends_at, agent_month, agent_count`,
+    [uid]
+  );
+  return created!;
+}
+
+function effectivePlan(s: PlanRow): "free" | "pro" {
+  if (s.plan === "pro") return "pro";
+  if (s.trial_ends_at && new Date(s.trial_ends_at).getTime() > Date.now()) return "pro";
+  return "free";
+}
+
+const currentMonth = () => new Date().toISOString().slice(0, 7);
+
+// For agent-attributed writes: increment the monthly meter; false when a free account is over its cap.
+async function meterAgentAction(uid: string): Promise<{ ok: boolean; count: number; limit: number }> {
+  const s = await ensureSettings(uid);
+  if (effectivePlan(s) === "pro") return { ok: true, count: s.agent_count ?? 0, limit: FREE.agentActions };
+  const month = currentMonth();
+  const count = s.agent_month === month ? (s.agent_count ?? 0) : 0;
+  if (count >= FREE.agentActions) return { ok: false, count, limit: FREE.agentActions };
+  await query("UPDATE user_settings SET agent_month = $1, agent_count = $2, updated_at = now() WHERE user_id = $3", [month, count + 1, uid]);
+  return { ok: true, count: count + 1, limit: FREE.agentActions };
+}
+
+const overLimit = (c: import("hono").Context, code: string, message: string) => c.json({ error: message, code, upgrade: true }, 402);
+
 /* ----------------------------- Boards (auth required) ----------------------------- */
 
 app.get("/boards", async (c) => {
@@ -115,6 +155,12 @@ app.post("/boards", zValidator("json", CreateBoardSchema), async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
+  if (effectivePlan(await ensureSettings(uid)) === "free") {
+    const count = await one<{ n: number }>("SELECT count(*)::int AS n FROM boards WHERE owner_id = $1", [uid]);
+    if ((count?.n ?? 0) >= FREE.boards) {
+      return overLimit(c, "board_limit", `Free plan is limited to ${FREE.boards} boards. Upgrade to Pro for unlimited boards.`);
+    }
+  }
   const publicKey = crypto.randomUUID();
 
   const board = await one<Board>(
@@ -359,6 +405,15 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
   if (!(await ownsBoard(data.board_id, uid))) return c.json({ error: "Board not found" }, 404);
+  if (effectivePlan(await ensureSettings(uid)) === "free") {
+    const count = await one<{ n: number }>(
+      "SELECT count(*)::int AS n FROM invitations i JOIN boards b ON b.id = i.board_id WHERE b.owner_id = $1",
+      [uid]
+    );
+    if ((count?.n ?? 0) >= FREE.testers) {
+      return overLimit(c, "tester_limit", `Free plan is limited to ${FREE.testers} testers. Upgrade to Pro to invite unlimited testers.`);
+    }
+  }
   const token = crypto.randomUUID();
 
   try {
@@ -454,6 +509,30 @@ app.get("/beta-categories/:boardId", async (c) => {
   if (!(await ownsBoard(boardId, uid))) return c.json({ error: "Board not found" }, 404);
   const categories = await query("SELECT * FROM beta_categories WHERE board_id = $1 ORDER BY name", [boardId]);
   return c.json(categories);
+});
+
+/* ----------------------------- Plan / billing ----------------------------- */
+
+app.get("/plan", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const s = await ensureSettings(uid);
+  const plan = effectivePlan(s);
+  const trialing = plan === "pro" && s.plan !== "pro" && !!s.trial_ends_at && new Date(s.trial_ends_at).getTime() > Date.now();
+  const boards = await one<{ n: number }>("SELECT count(*)::int AS n FROM boards WHERE owner_id = $1", [uid]);
+  const testers = await one<{ n: number }>(
+    "SELECT count(*)::int AS n FROM invitations i JOIN boards b ON b.id = i.board_id WHERE b.owner_id = $1",
+    [uid]
+  );
+  const agentUsed = s.agent_month === currentMonth() ? (s.agent_count ?? 0) : 0;
+  return c.json({
+    plan,
+    trialing,
+    trial_ends_at: trialing ? s.trial_ends_at : null,
+    limits: FREE,
+    usage: { boards: boards?.n ?? 0, testers: testers?.n ?? 0, agentActions: agentUsed },
+    price: { pro_monthly: 7 },
+  });
 });
 
 /* ----------------------------- Settings + team (auth required) ----------------------------- */
@@ -596,6 +675,11 @@ app.post("/issues/:id/move", async (c) => {
     [id, uid]
   );
   if (!t) return c.json({ error: "Issue not found" }, 404);
+  // An agent-attributed move counts against the monthly agent-action meter (free plan).
+  if (agent) {
+    const m = await meterAgentAction(uid);
+    if (!m.ok) return overLimit(c, "agent_limit", `You've used all ${m.limit} agent actions on the Free plan this month. Upgrade to Pro for unlimited automation.`);
+  }
   const target = await one<{ id: number; title: string }>("SELECT id, title FROM columns WHERE board_id = $1 AND lower(title) = lower($2)", [t.board_id, phase]);
   if (!target) {
     const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [t.board_id]);
@@ -624,6 +708,8 @@ app.post("/issues/:id/agent", async (c) => {
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
   if (!(await ownsTask(id, uid))) return c.json({ error: "Issue not found" }, 404);
+  const meter = await meterAgentAction(uid);
+  if (!meter.ok) return overLimit(c, "agent_limit", `You've used all ${meter.limit} agent actions on the Free plan this month. Upgrade to Pro for unlimited automation.`);
   const body = await c.req.json().catch(() => ({}));
   const agent = cleanAgent(body.agent);
   const status = typeof body.status === "string" ? body.status.trim().toLowerCase() : undefined;
@@ -647,10 +733,18 @@ app.get("/issues/:id/comments", async (c) => {
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
   if (!(await ownsTask(id, uid))) return c.json({ error: "Issue not found" }, 404);
-  const comments = await query(
-    "SELECT id, author, body, is_system, created_at FROM task_comments WHERE task_id = $1 ORDER BY created_at ASC, id ASC",
-    [id]
-  );
+  // Free plan only sees the recent activity window; Pro sees the full history.
+  const free = effectivePlan(await ensureSettings(uid)) === "free";
+  const comments = free
+    ? await query(
+        `SELECT id, author, body, is_system, created_at FROM task_comments
+         WHERE task_id = $1 AND created_at > now() - ($2 || ' days')::interval ORDER BY created_at ASC, id ASC`,
+        [id, String(FREE.historyDays)]
+      )
+    : await query(
+        "SELECT id, author, body, is_system, created_at FROM task_comments WHERE task_id = $1 ORDER BY created_at ASC, id ASC",
+        [id]
+      );
   return c.json(comments);
 });
 
@@ -685,6 +779,10 @@ app.put("/github", async (c) => {
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const token = typeof body.token === "string" ? body.token.trim() : "";
+  // Connecting GitHub is a Pro feature (disconnecting is always allowed).
+  if (token && effectivePlan(await ensureSettings(uid)) === "free") {
+    return overLimit(c, "pro_feature", "The GitHub bridge is a Pro feature. Upgrade to connect a repo.");
+  }
   let login: string | null = null;
   if (token) {
     const r = await fetch("https://api.github.com/user", {

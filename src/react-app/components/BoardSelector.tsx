@@ -5,6 +5,7 @@ import { useAppContext } from '@/react-app/context/AppContext';
 import DarkModeToggle from '@/react-app/components/DarkModeToggle';
 import EditBoardModal from '@/react-app/components/EditBoardModal';
 import SettingsModal from '@/react-app/components/SettingsModal';
+import UpgradeModal from '@/react-app/components/UpgradeModal';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
 import { celebrate } from '@/react-app/lib/confetti';
@@ -46,6 +47,8 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingBoard, setEditingBoard] = useState<Board | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
   const [org, setOrg] = useState<{ org_name: string | null; org_image: string | null }>({ org_name: null, org_image: null });
 
   const loadOrg = useCallback(() => {
@@ -74,7 +77,9 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
       celebrate();
       refetchBoards();
     } catch (error) {
-      console.error('Failed to create board:', error);
+      const e = error as Error & { upgrade?: boolean };
+      if (e.upgrade) { setShowCreateForm(false); setUpgradeReason(e.message); setUpgradeOpen(true); }
+      else console.error('Failed to create board:', error);
     }
   };
 
@@ -284,6 +289,7 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
       </div>
 
       <SettingsModal isOpen={settingsOpen} onClose={() => { setSettingsOpen(false); loadOrg(); }} />
+      <UpgradeModal isOpen={upgradeOpen} onClose={() => setUpgradeOpen(false)} reason={upgradeReason} />
 
       <EditBoardModal
         board={editingBoard}

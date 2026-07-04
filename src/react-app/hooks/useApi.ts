@@ -49,7 +49,13 @@ export async function createBoard(board: CreateBoard): Promise<Board> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(board),
   });
-  if (!response.ok) throw new Error('Failed to create board');
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({} as { error?: string; code?: string; upgrade?: boolean }));
+    const err = new Error(body.error || 'Failed to create board') as Error & { code?: string; upgrade?: boolean };
+    err.code = body.code;
+    err.upgrade = body.upgrade;
+    throw err;
+  }
   return response.json();
 }
 
