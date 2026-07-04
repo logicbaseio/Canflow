@@ -142,7 +142,7 @@ export default function PublicBoardView({ publicKey }: PublicBoardViewProps) {
             <div className="flex items-center gap-2 flex-wrap">
               {org.name && <span className="text-[13.5px] font-semibold text-ink">{org.name}</span>}
               {org.name && <span className="text-ink-subtle">·</span>}
-              <h1 className="text-[19px] font-semibold tracking-tight text-ink truncate">{board.title}</h1>
+              <h1 className="text-[13.5px] font-semibold tracking-tight text-ink truncate">{board.title}</h1>
               <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-brand">
                 <Globe size={12} /> Public {isRoadmap ? 'roadmap' : 'board'}
               </span>
