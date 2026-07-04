@@ -20,6 +20,13 @@ export default function AuthPage() {
 
   const switchMode = (m: Mode) => { setMode(m); setError(null); setNotice(null); };
 
+  // Send the verification code, then hand off to the dedicated /verify page
+  // (survives the auth-gate re-render that happens right after sign-up).
+  const goVerify = async (addr: string) => {
+    try { await authClient.sendVerificationEmail({ email: addr, callbackURL: window.location.origin }); } catch { /* best effort */ }
+    window.location.assign(`/verify?email=${encodeURIComponent(addr)}`);
+  };
+
   const googleSignIn = async () => {
     setError(null);
     setGoogleLoading(true);
@@ -48,17 +55,14 @@ export default function AuthPage() {
         ? await authClient.signUp.email({ email: email.trim(), password, name: name.trim() || email.split("@")[0] })
         : await authClient.signIn.email({ email: email.trim(), password });
       if (res?.error) {
+        // Sign-in blocked because the email isn't verified → send a code and go verify.
+        if (!isSignUp && /verif/i.test(res.error.message || "")) { await goVerify(email.trim()); return; }
         setError(res.error.message || "Something went wrong. Please try again.");
         setLoading(false);
         return;
       }
-      // If sign-up requires email verification, no session is created yet.
-      const user = res?.data?.user;
-      if (isSignUp && user && user.emailVerified === false && !res?.data?.token) {
-        setNotice({ title: "Verify your email", body: `We sent a verification link to ${email.trim()}. Open it to activate your account, then sign in.` });
-        setLoading(false);
-        return;
-      }
+      // Sign-up requires email verification → send the code and go to the verify page.
+      if (isSignUp) { await goVerify(email.trim()); return; }
       window.location.assign("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
