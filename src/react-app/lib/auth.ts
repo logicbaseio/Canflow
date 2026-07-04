@@ -12,7 +12,7 @@ export const authClient = neon.adapter;
 export const getJWTToken = neon.getJWTToken;
 
 export type SessionState = {
-  data: { user?: { id: string; name?: string; email?: string } } | null;
+  data: { user?: { id: string; name?: string; email?: string; image?: string | null } } | null;
   isPending: boolean;
 };
 

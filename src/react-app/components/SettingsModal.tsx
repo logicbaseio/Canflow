@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key, RefreshCw, Github } from 'lucide-react';
+import { X, User as UserIcon, Building2, Users, Loader2, Shield, Mail, Check, Terminal, Copy, Plus, Trash2, Key, RefreshCw, Github, LogOut } from 'lucide-react';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
 import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
+import AvatarUpload from '@/react-app/components/ui/AvatarUpload';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -39,7 +40,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const user = data?.user;
   const [tab, setTab] = useState<Tab>('profile');
   const [name, setName] = useState('');
+  const [image, setImage] = useState<string | null>(null);
   const [orgName, setOrgName] = useState('');
+  const [orgImage, setOrgImage] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingOrg, setSavingOrg] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
@@ -60,10 +63,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (!isOpen) return;
     setTab('profile');
     setName(user?.name || '');
+    setImage(user?.image || null);
     setSavedProfile(false);
     setSavedOrg(false);
     setCreatedToken(null);
-    authedFetch('/api/settings').then((r) => r.json()).then((s) => setOrgName(s?.org_name || '')).catch(() => {});
+    authedFetch('/api/settings').then((r) => r.json()).then((s) => { setOrgName(s?.org_name || ''); setOrgImage(s?.org_image || null); }).catch(() => {});
     setLoadingInvites(true);
     authedFetch('/api/invitations')
       .then((r) => r.json())
@@ -170,7 +174,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setSavingProfile(true);
     setSavedProfile(false);
     try {
-      await authClient.updateUser({ name: name.trim() });
+      await authClient.updateUser({ name: name.trim(), image: image ?? null });
       setSavedProfile(true);
     } catch (e) {
       console.error('Failed to update profile:', e);
@@ -186,7 +190,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       await authedFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ org_name: orgName.trim() }),
+        body: JSON.stringify({ org_name: orgName.trim(), org_image: orgImage }),
       });
       setSavedOrg(true);
     } catch (e) {
@@ -194,6 +198,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     } finally {
       setSavingOrg(false);
     }
+  };
+
+  const signOut = async () => {
+    try { await authClient.signOut(); } catch { /* ignore */ }
+    window.location.assign('/');
   };
 
   if (!isOpen) return null;
@@ -257,12 +266,16 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
             {tab === 'profile' && (
               <div className="space-y-5">
-                <div className="flex items-center gap-3.5">
-                  <span className="h-14 w-14 rounded-full bg-accent-soft flex items-center justify-center text-[18px] font-semibold text-ink">{initial}</span>
-                  <div className="min-w-0">
-                    <p className="text-[15px] font-medium text-ink truncate">{user?.name || 'Your account'}</p>
-                    <p className="text-[12.5px] text-ink-subtle truncate">{user?.email}</p>
-                  </div>
+                <div>
+                  <span className="mb-2 block text-[12.5px] font-medium text-ink-muted">Display image</span>
+                  <AvatarUpload
+                    src={image}
+                    onChange={(v) => { setImage(v); setSavedProfile(false); }}
+                    size={64}
+                    shape="circle"
+                    label="Upload a photo"
+                    fallback={<span className="text-[18px] font-semibold text-ink">{initial}</span>}
+                  />
                 </div>
                 <label className="block max-w-md">
                   <span className="mb-1.5 block text-[12.5px] font-medium text-ink-muted">Display name</span>
@@ -277,11 +290,30 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     {savingProfile ? <Loader2 size={15} className="animate-spin" /> : savedProfile ? <><Check size={15} /> Saved</> : 'Save changes'}
                   </button>
                 </div>
+
+                <div className="max-w-md border-t border-line pt-5">
+                  <p className="text-[12.5px] font-medium text-ink">Sign out</p>
+                  <p className="mt-0.5 mb-2.5 text-[12px] text-ink-subtle">Sign out of Canflow on this device.</p>
+                  <button onClick={signOut} className="btn btn-outline h-9 px-4 text-danger">
+                    <LogOut size={15} /> Log out
+                  </button>
+                </div>
               </div>
             )}
 
             {tab === 'organization' && (
               <div className="space-y-5">
+                <div>
+                  <span className="mb-2 block text-[12.5px] font-medium text-ink-muted">Organization logo</span>
+                  <AvatarUpload
+                    src={orgImage}
+                    onChange={(v) => { setOrgImage(v); setSavedOrg(false); }}
+                    size={64}
+                    shape="square"
+                    label="Upload a logo"
+                    fallback={<Building2 size={24} className="text-ink-subtle" />}
+                  />
+                </div>
                 <label className="block max-w-md">
                   <span className="mb-1.5 block text-[12.5px] font-medium text-ink-muted">Organization name</span>
                   <input value={orgName} onChange={(e) => { setOrgName(e.target.value); setSavedOrg(false); }} className="field" placeholder="e.g. Acme Inc." />
@@ -300,7 +332,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div>
                   <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Admin</p>
                   <div className="flex items-center gap-3 card p-3">
-                    <span className="h-9 w-9 rounded-full bg-accent-soft flex items-center justify-center text-[13px] font-semibold text-ink">{initial}</span>
+                    <span className="h-9 w-9 rounded-full bg-accent-soft flex items-center justify-center text-[13px] font-semibold text-ink overflow-hidden shrink-0">
+                      {user?.image ? <img src={user.image} alt="" className="h-full w-full object-cover" /> : initial}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[13.5px] font-medium text-ink truncate">{user?.name || 'You'}</p>
                       <p className="text-[12px] text-ink-subtle truncate">{user?.email}</p>

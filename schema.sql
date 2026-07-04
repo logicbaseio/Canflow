@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS beta_categories (
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id     TEXT PRIMARY KEY,
   org_name    TEXT,
+  org_image   TEXT,   -- organization logo (data URL)
   updated_at  TIMESTAMPTZ DEFAULT now()
 );
 

@@ -456,21 +456,25 @@ app.get("/beta-categories/:boardId", async (c) => {
 app.get("/settings", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
-  const row = await one<{ org_name: string | null }>("SELECT org_name FROM user_settings WHERE user_id = $1", [uid]);
-  return c.json({ org_name: row?.org_name ?? null });
+  const row = await one<{ org_name: string | null; org_image: string | null }>(
+    "SELECT org_name, org_image FROM user_settings WHERE user_id = $1",
+    [uid]
+  );
+  return c.json({ org_name: row?.org_name ?? null, org_image: row?.org_image ?? null });
 });
 
 app.put("/settings", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
-  const orgName = typeof body.org_name === "string" ? body.org_name.trim() : null;
+  const orgName = typeof body.org_name === "string" && body.org_name.trim() ? body.org_name.trim() : null;
+  const orgImage = typeof body.org_image === "string" && body.org_image ? body.org_image : null;
   await query(
-    `INSERT INTO user_settings (user_id, org_name, updated_at) VALUES ($1, $2, now())
-     ON CONFLICT (user_id) DO UPDATE SET org_name = EXCLUDED.org_name, updated_at = now()`,
-    [uid, orgName || null]
+    `INSERT INTO user_settings (user_id, org_name, org_image, updated_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id) DO UPDATE SET org_name = EXCLUDED.org_name, org_image = EXCLUDED.org_image, updated_at = now()`,
+    [uid, orgName, orgImage]
   );
-  return c.json({ org_name: orgName || null });
+  return c.json({ org_name: orgName, org_image: orgImage });
 });
 
 /** All beta-tester invitations across the user's boards (for the Members view). */
