@@ -59,7 +59,7 @@ CANFLOW_VERDICT: REGRESSED   # still broken → back to Issues Identified
 | Variable | Default | Description |
 | --- | --- | --- |
 | `CANFLOW_TOKEN` | — | **Required.** Token from Canflow → Settings → Developer |
-| `CANFLOW_API_URL` | `https://canflow.app` | Override for self-hosted |
+| `CANFLOW_API_URL` | `https://boards.canflow.app` | Override for self-hosted |
 | `CANFLOW_AGENT` | `claude` | `claude` or `codex` |
 | `CANFLOW_BOARD_ID` | — | Limit to a single board |
 | `CANFLOW_POLL_SECONDS` | `30` | Poll interval (continuous mode) |

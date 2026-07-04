@@ -27,7 +27,7 @@ env = { CANFLOW_TOKEN = "cf_your_token" }
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `CANFLOW_TOKEN` | yes | — | Access token from Canflow → Settings → Developer |
-| `CANFLOW_API_URL` | no | `https://canflow.app` | Override for self-hosted instances |
+| `CANFLOW_API_URL` | no | `https://boards.canflow.app` | Override for self-hosted instances |
 
 ## Tools
 

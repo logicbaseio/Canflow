@@ -201,9 +201,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const initial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
   const active = TABS.find((t) => t.id === tab)!;
   const tok = createdToken || tokens.find((t) => t.token)?.token || '<YOUR_TOKEN>';
-  const claudeCmd = `claude mcp add canflow --env CANFLOW_TOKEN=${tok} -- npx -y canflow-mcp`;
-  const codexCfg = `[mcp_servers.canflow]\ncommand = "npx"\nargs = ["-y", "canflow-mcp"]\nenv = { CANFLOW_TOKEN = "${tok}" }`;
-  const loopCmd = `CANFLOW_TOKEN=${tok} npx -y canflow-agent --agent claude --yes`;
+  const apiUrl = typeof window !== 'undefined' ? window.location.origin : 'https://boards.canflow.app';
+  const claudeCmd = `claude mcp add canflow --env CANFLOW_TOKEN=${tok} --env CANFLOW_API_URL=${apiUrl} -- npx -y canflow-mcp`;
+  const codexCfg = `[mcp_servers.canflow]\ncommand = "npx"\nargs = ["-y", "canflow-mcp"]\nenv = { CANFLOW_TOKEN = "${tok}", CANFLOW_API_URL = "${apiUrl}" }`;
+  const loopCmd = `CANFLOW_TOKEN=${tok} CANFLOW_API_URL=${apiUrl} npx -y canflow-agent --agent claude --yes`;
 
   return (
     <div className="fixed inset-0 z-50 bg-app text-ink flex flex-col animate-fade-in">

@@ -17,7 +17,7 @@
  *
  * Env:
  *   CANFLOW_TOKEN            (required) token from Canflow → Settings → Developer
- *   CANFLOW_API_URL          (default https://canflow.app)
+ *   CANFLOW_API_URL          (default https://boards.canflow.app)
  *   CANFLOW_AGENT            claude | codex        (default: claude)
  *   CANFLOW_BOARD_ID         limit to one board    (optional but recommended)
  *   CANFLOW_POLL_SECONDS     poll interval         (default: 30)
@@ -52,7 +52,7 @@ const { values: flags } = parseArgs({
 });
 
 const TOKEN = process.env.CANFLOW_TOKEN;
-const API = (process.env.CANFLOW_API_URL || "https://canflow.app").replace(/\/$/, "");
+const API = (process.env.CANFLOW_API_URL || "https://boards.canflow.app").replace(/\/$/, "");
 const AGENT = (flags.agent || process.env.CANFLOW_AGENT || "claude").toLowerCase();
 const MODE = (flags.mode || "loop").toLowerCase();
 const BOARD = flags.board || process.env.CANFLOW_BOARD_ID;

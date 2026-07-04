@@ -5,14 +5,14 @@
  *
  * Env:
  *   CANFLOW_TOKEN    (required) — a token from Canflow → Settings → Developer
- *   CANFLOW_API_URL  (optional) — defaults to https://canflow.app
+ *   CANFLOW_API_URL  (optional) — defaults to https://boards.canflow.app
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
 const TOKEN = process.env.CANFLOW_TOKEN;
-const API = (process.env.CANFLOW_API_URL || "https://canflow.app").replace(/\/$/, "");
+const API = (process.env.CANFLOW_API_URL || "https://boards.canflow.app").replace(/\/$/, "");
 
 if (!TOKEN) {
   console.error("CANFLOW_TOKEN is required. Create one in Canflow → Settings → Developer.");

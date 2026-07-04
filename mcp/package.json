@@ -1,6 +1,6 @@
 {
   "name": "canflow-mcp",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MCP server that lets Claude Code, Codex and other MCP clients read and update Canflow issue cards.",
   "type": "module",
   "bin": {
