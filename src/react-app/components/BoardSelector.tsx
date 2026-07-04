@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, MoreHorizontal, Edit2, Trash2, Link2, Globe, Lock, LogOut, Settings } from 'lucide-react';
 import { createBoard, deleteBoard, updateBoard } from '@/react-app/hooks/useApi';
 import { useAppContext } from '@/react-app/context/AppContext';
@@ -7,7 +7,7 @@ import EditBoardModal from '@/react-app/components/EditBoardModal';
 import SettingsModal from '@/react-app/components/SettingsModal';
 import UpgradeModal from '@/react-app/components/UpgradeModal';
 import { useDialog } from '@/react-app/components/ui/Dialog';
-import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
+import { authClient, useSession } from '@/react-app/lib/auth';
 import { celebrate } from '@/react-app/lib/confetti';
 import type { CreateBoard, Board, UpdateBoard } from '@/shared/types';
 
@@ -49,15 +49,6 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
-  const [org, setOrg] = useState<{ org_name: string | null; org_image: string | null }>({ org_name: null, org_image: null });
-
-  const loadOrg = useCallback(() => {
-    authedFetch('/api/settings')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((s) => s && setOrg({ org_name: s.org_name ?? null, org_image: s.org_image ?? null }))
-      .catch(() => {});
-  }, []);
-  useEffect(() => { loadOrg(); }, [loadOrg]);
 
   // Return from Stripe Checkout.
   useEffect(() => {
@@ -139,15 +130,11 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
 
   return (
     <aside className="w-64 shrink-0 h-screen bg-app border-r border-line flex flex-col">
-      {/* Brand (org logo/name when set) + new */}
+      {/* Brand + new */}
       <div className="px-3 pt-3.5 pb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2 pl-1 min-w-0">
-          {org.org_image ? (
-            <img src={org.org_image} alt="" className="h-[18px] w-[18px] rounded object-cover shrink-0" />
-          ) : (
-            <Logo className="h-[18px] w-[18px]" />
-          )}
-          <span className="text-[13.5px] font-semibold tracking-tight truncate">{org.org_name || 'Canflow'}</span>
+        <div className="flex items-center gap-2 pl-1">
+          <Logo className="h-[18px] w-[18px]" />
+          <span className="text-[13.5px] font-semibold tracking-tight">Canflow</span>
         </div>
         <button
           onClick={() => setShowCreateForm((v) => !v)}
@@ -300,7 +287,7 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
         <UserFooter boardCount={boards?.length ?? 0} onOpenSettings={() => setSettingsOpen(true)} />
       </div>
 
-      <SettingsModal isOpen={settingsOpen} onClose={() => { setSettingsOpen(false); loadOrg(); }} />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <UpgradeModal isOpen={upgradeOpen} onClose={() => setUpgradeOpen(false)} reason={upgradeReason} />
 
       <EditBoardModal
