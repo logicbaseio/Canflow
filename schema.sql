@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   stripe_customer_id     TEXT,
   stripe_subscription_id TEXT,
   subscription_status    TEXT,          -- Stripe subscription status
+  onboarded     BOOLEAN DEFAULT false,  -- has the user completed first-run onboarding
   updated_at    TIMESTAMPTZ DEFAULT now()
 );
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import BoardSelector from '@/react-app/components/BoardSelector';
+import OnboardingModal from '@/react-app/components/OnboardingModal';
 import KanbanBoard from '@/react-app/components/KanbanBoard';
 import RoadmapBoard from '@/react-app/components/RoadmapBoard';
 import BetaTestingBoard from '@/react-app/components/BetaTestingBoard';
@@ -66,6 +67,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-app text-ink overflow-hidden">
+      <OnboardingModal onDone={refetchBoards} />
       <BoardSelector boards={boards ?? null} refetchBoards={refetchBoards} onBoardSelect={handleBoardSelect} />
 
       {state.selectedBoardId && selectedBoard ? (

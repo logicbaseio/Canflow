@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ArrowRight, Loader2, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Loader2, Mail, Lock, User, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { authClient } from "@/react-app/lib/auth";
 
-type Mode = "sign-in" | "sign-up";
+type Mode = "sign-in" | "sign-up" | "forgot";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>("sign-in");
@@ -12,19 +12,50 @@ export default function AuthPage() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
 
   const isSignUp = mode === "sign-up";
+  const isForgot = mode === "forgot";
+
+  const switchMode = (m: Mode) => { setMode(m); setError(null); setNotice(null); };
+
+  const googleSignIn = async () => {
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      await authClient.signIn.social({ provider: "google", callbackURL: window.location.origin });
+      // browser redirects to Google
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed.");
+      setGoogleLoading(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const res = isSignUp
+      if (isForgot) {
+        const res: any = await authClient.requestPasswordReset({ email: email.trim(), redirectTo: `${window.location.origin}/reset-password` });
+        if (res?.error) throw new Error(res.error.message);
+        setNotice({ title: "Check your inbox", body: `If an account exists for ${email.trim()}, we've sent a link to reset your password.` });
+        setLoading(false);
+        return;
+      }
+      const res: any = isSignUp
         ? await authClient.signUp.email({ email: email.trim(), password, name: name.trim() || email.split("@")[0] })
         : await authClient.signIn.email({ email: email.trim(), password });
       if (res?.error) {
         setError(res.error.message || "Something went wrong. Please try again.");
+        setLoading(false);
+        return;
+      }
+      // If sign-up requires email verification, no session is created yet.
+      const user = res?.data?.user;
+      if (isSignUp && user && user.emailVerified === false && !res?.data?.token) {
+        setNotice({ title: "Verify your email", body: `We sent a verification link to ${email.trim()}. Open it to activate your account, then sign in.` });
         setLoading(false);
         return;
       }
@@ -62,93 +93,103 @@ export default function AuthPage() {
         </div>
 
         <div className="card shadow-pop p-7 sm:p-8">
-          <h1 className="text-[21px] font-semibold tracking-tight text-center">
-            {isSignUp ? "Create your account" : "Welcome back"}
-          </h1>
-          <p className="mt-1.5 text-[13px] text-ink-muted text-center">
-            {isSignUp ? "Start organizing your work in minutes." : "Sign in to continue to your boards."}
-          </p>
-
-          {/* Segmented toggle */}
-          <div className="mt-6 flex gap-1 p-1 rounded-xl bg-surface-2">
-            {(["sign-in", "sign-up"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => { setMode(m); setError(null); }}
-                className={`flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors ${
-                  mode === m ? "bg-surface text-ink shadow-subtle" : "text-ink-muted hover:text-ink"
-                }`}
-              >
-                {m === "sign-in" ? "Sign in" : "Sign up"}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={submit} className="mt-5 space-y-3">
-            {isSignUp && (
-              <IconField icon={<User size={15} />}>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="field pl-9"
-                  placeholder="Full name"
-                  autoComplete="name"
-                />
-              </IconField>
-            )}
-            <IconField icon={<Mail size={15} />}>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="field pl-9"
-                placeholder="Email address"
-                autoComplete="email"
-                required
-                autoFocus
-              />
-            </IconField>
-            <IconField icon={<Lock size={15} />}>
-              <input
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="field pl-9 pr-9"
-                placeholder={isSignUp ? "Create a password (8+ chars)" : "Password"}
-                autoComplete={isSignUp ? "new-password" : "current-password"}
-                required
-                minLength={8}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw((v) => !v)}
-                tabIndex={-1}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-subtle hover:text-ink"
-                aria-label={showPw ? "Hide password" : "Show password"}
-              >
-                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </IconField>
-
-            {error && (
-              <p className="rounded-lg px-3 py-2 text-[12.5px] text-danger" style={{ background: "color-mix(in srgb, var(--danger) 10%, transparent)" }}>
-                {error}
+          {notice ? (
+            <div className="text-center py-2">
+              <span className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent-soft)]">
+                <CheckCircle2 size={22} className="text-success" />
+              </span>
+              <h1 className="text-[19px] font-semibold tracking-tight">{notice.title}</h1>
+              <p className="mt-2 text-[13px] text-ink-muted leading-relaxed">{notice.body}</p>
+              <button onClick={() => switchMode("sign-in")} className="btn btn-outline h-9 px-4 mt-5">Back to sign in</button>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-[21px] font-semibold tracking-tight text-center">
+                {isForgot ? "Reset your password" : isSignUp ? "Create your account" : "Welcome back"}
+              </h1>
+              <p className="mt-1.5 text-[13px] text-ink-muted text-center">
+                {isForgot ? "We'll email you a link to set a new password." : isSignUp ? "Start organizing your work in minutes." : "Sign in to continue to your boards."}
               </p>
-            )}
 
-            <button type="submit" disabled={loading} className="btn btn-primary h-10 w-full mt-1">
-              {loading ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
+              {!isForgot && (
                 <>
-                  {isSignUp ? "Create account" : "Sign in"}
-                  <ArrowRight size={15} />
+                  <button type="button" onClick={googleSignIn} disabled={googleLoading} className="btn btn-outline h-10 w-full mt-6 gap-2.5">
+                    {googleLoading ? <Loader2 size={16} className="animate-spin" /> : <GoogleIcon />}
+                    Continue with Google
+                  </button>
+                  <div className="my-4 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-line" />
+                    <span className="text-[11.5px] text-ink-subtle">or</span>
+                    <div className="h-px flex-1 bg-line" />
+                  </div>
+
+                  {/* Segmented toggle */}
+                  <div className="flex gap-1 p-1 rounded-xl bg-surface-2">
+                    {(["sign-in", "sign-up"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => switchMode(m)}
+                        className={`flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors ${
+                          mode === m ? "bg-surface text-ink shadow-subtle" : "text-ink-muted hover:text-ink"
+                        }`}
+                      >
+                        {m === "sign-in" ? "Sign in" : "Sign up"}
+                      </button>
+                    ))}
+                  </div>
                 </>
               )}
-            </button>
-          </form>
+
+              <form onSubmit={submit} className="mt-5 space-y-3">
+                {isSignUp && (
+                  <IconField icon={<User size={15} />}>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="field pl-9" placeholder="Full name" autoComplete="name" />
+                  </IconField>
+                )}
+                <IconField icon={<Mail size={15} />}>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field pl-9" placeholder="Email address" autoComplete="email" required autoFocus />
+                </IconField>
+                {!isForgot && (
+                  <IconField icon={<Lock size={15} />}>
+                    <input
+                      type={showPw ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="field pl-9 pr-9"
+                      placeholder={isSignUp ? "Create a password (8+ chars)" : "Password"}
+                      autoComplete={isSignUp ? "new-password" : "current-password"}
+                      required
+                      minLength={8}
+                    />
+                    <button type="button" onClick={() => setShowPw((v) => !v)} tabIndex={-1} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-subtle hover:text-ink" aria-label={showPw ? "Hide password" : "Show password"}>
+                      {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </IconField>
+                )}
+
+                {!isSignUp && !isForgot && (
+                  <div className="text-right -mt-1">
+                    <button type="button" onClick={() => switchMode("forgot")} className="text-[12px] text-ink-muted hover:text-ink">Forgot password?</button>
+                  </div>
+                )}
+
+                {error && (
+                  <p className="rounded-lg px-3 py-2 text-[12.5px] text-danger" style={{ background: "color-mix(in srgb, var(--danger) 10%, transparent)" }}>{error}</p>
+                )}
+
+                <button type="submit" disabled={loading} className="btn btn-primary h-10 w-full mt-1">
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : (
+                    <>{isForgot ? "Send reset link" : isSignUp ? "Create account" : "Sign in"}<ArrowRight size={15} /></>
+                  )}
+                </button>
+
+                {isForgot && (
+                  <button type="button" onClick={() => switchMode("sign-in")} className="btn btn-ghost h-9 w-full text-[12.5px] text-ink-muted">Back to sign in</button>
+                )}
+              </form>
+            </>
+          )}
         </div>
 
         <p className="mt-5 text-center text-[11.5px] text-ink-subtle">Secured by Neon Auth</p>
@@ -163,6 +204,17 @@ function IconField({ icon, children }: { icon: React.ReactNode; children: React.
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle">{icon}</span>
       {children}
     </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[17px] w-[17px]" aria-hidden>
+      <path fill="#4285F4" d="M23.06 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h6.2a5.3 5.3 0 0 1-2.3 3.48v2.89h3.72c2.18-2 3.44-4.96 3.44-8.38Z" />
+      <path fill="#34A853" d="M12 24c3.1 0 5.7-1.03 7.6-2.79l-3.72-2.89c-1.03.69-2.35 1.1-3.88 1.1-2.98 0-5.5-2.01-6.4-4.72H1.75v2.98A12 12 0 0 0 12 24Z" />
+      <path fill="#FBBC05" d="M5.6 14.7a7.2 7.2 0 0 1 0-4.6V7.12H1.75a12 12 0 0 0 0 10.76L5.6 14.7Z" />
+      <path fill="#EA4335" d="M12 4.75c1.68 0 3.19.58 4.38 1.72l3.28-3.28C17.7 1.19 15.1 0 12 0A12 12 0 0 0 1.75 7.12L5.6 10.1C6.5 7.39 9.02 4.75 12 4.75Z" />
+    </svg>
   );
 }
 

@@ -8,6 +8,7 @@ import HomePage from "@/react-app/pages/Home";
 import PublicBoardPage from "@/react-app/pages/PublicBoard";
 import InvitedUserPage from "@/react-app/pages/InvitedUser";
 import AuthPage from "@/react-app/pages/Auth";
+import ResetPasswordPage from "@/react-app/pages/ResetPassword";
 
 /** Gate protected routes behind Neon Auth. Public/invite links stay open. */
 function Gate({ children }: { children: ReactNode }) {
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="/" element={<Gate><HomePage /></Gate>} />
               <Route path="/public/:publicKey" element={<PublicBoardPage />} />
               <Route path="/invited/:token" element={<InvitedUserPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
             </Routes>
           </Router>
         </AppProvider>

@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import type { Context } from "hono";
 import { stripeFetch, verifyStripeEvent } from "./stripe";
+import { buildAuthEmail } from "./auth-emails";
 import {
   CreateBoardSchema,
   UpdateBoardSchema,
@@ -526,8 +527,8 @@ app.get("/plan", async (c) => {
     [uid]
   );
   const agentUsed = s.agent_month === currentMonth() ? (s.agent_count ?? 0) : 0;
-  const billing = await one<{ stripe_customer_id: string | null; subscription_status: string | null }>(
-    "SELECT stripe_customer_id, subscription_status FROM user_settings WHERE user_id = $1",
+  const billing = await one<{ stripe_customer_id: string | null; subscription_status: string | null; onboarded: boolean | null }>(
+    "SELECT stripe_customer_id, subscription_status, onboarded FROM user_settings WHERE user_id = $1",
     [uid]
   );
   return c.json({
@@ -540,7 +541,17 @@ app.get("/plan", async (c) => {
     manageable: !!billing?.stripe_customer_id,
     subscription_status: billing?.subscription_status ?? null,
     billing_enabled: !!process.env.STRIPE_SECRET_KEY,
+    onboarded: !!billing?.onboarded,
   });
+});
+
+// Mark first-run onboarding complete.
+app.post("/onboarding/complete", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  await ensureSettings(uid);
+  await query("UPDATE user_settings SET onboarded = true, updated_at = now() WHERE user_id = $1", [uid]);
+  return c.json({ ok: true });
 });
 
 /* ----------------------------- Stripe billing ----------------------------- */
@@ -623,6 +634,32 @@ app.post("/billing/webhook", async (c) => {
     await query("UPDATE user_settings SET plan = $1, subscription_status = $2, updated_at = now() WHERE stripe_customer_id = $3", [plan, status, obj.customer]);
   } else if (event.type === "customer.subscription.deleted") {
     await query("UPDATE user_settings SET plan = 'free', subscription_status = 'canceled', updated_at = now() WHERE stripe_customer_id = $1", [obj.customer]);
+  }
+  return c.json({ received: true });
+});
+
+/* ----------------------------- Auth emails (Neon Auth webhook → Resend) ----------------------------- */
+
+// Neon Auth calls this on send.otp / send.magic_link so we deliver branded emails.
+// Secured by a shared secret in the query string (configured in the webhook URL).
+app.post("/auth/email", async (c) => {
+  const secret = process.env.AUTH_EMAIL_SECRET || "";
+  if (!secret || c.req.query("key") !== secret) return c.json({ error: "Unauthorized" }, 401);
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_API_KEY) return c.json({ error: "Email not configured" }, 503);
+  const evt = await c.req.json().catch(() => null);
+  if (!evt) return c.json({ error: "Bad payload" }, 400);
+  const mail = buildAuthEmail(evt);
+  if (!mail) return c.json({ received: true, skipped: true }); // unknown/irrelevant event → ack
+  const from = process.env.RESEND_FROM || "Canflow <noreply@canflow.app>";
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: mail.to, subject: mail.subject, html: mail.html }),
+  });
+  if (!res.ok) {
+    const d = (await res.json().catch(() => ({}))) as { message?: string };
+    return c.json({ error: d.message || `Resend ${res.status}` }, 502);
   }
   return c.json({ received: true });
 });
