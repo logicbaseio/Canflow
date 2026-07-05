@@ -32,8 +32,20 @@ function shell(inner: string): string {
   <body style="margin:0;background:#f6f6f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased">
     <div style="max-width:440px;margin:0 auto;background:#ffffff;border:1px solid #ececec;border-radius:14px;overflow:hidden">
       <div style="padding:30px 32px 0;text-align:center">
-        <span style="display:inline-block;width:32px;height:32px;background:#1d1d1f;border-radius:9px;vertical-align:middle"></span>
-        <span style="font-size:17px;font-weight:600;color:#1d1d1f;margin-left:9px;vertical-align:middle;letter-spacing:-.2px">Canflow</span>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-block;vertical-align:middle">
+          <tr>
+            <td valign="middle" align="center" style="width:34px;height:34px;background:#1d1d1f;border-radius:9px">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:0 auto">
+                <tr>
+                  <td valign="top" style="padding-right:3px"><div style="width:5px;height:18px;background:#ffffff;border-radius:2px;font-size:0;line-height:0">&nbsp;</div></td>
+                  <td valign="top" style="padding-right:3px"><div style="width:5px;height:12px;background:#ffffff;border-radius:2px;font-size:0;line-height:0">&nbsp;</div></td>
+                  <td valign="top"><div style="width:3px;height:8px;background:#ffffff;border-radius:1px;font-size:0;line-height:0">&nbsp;</div></td>
+                </tr>
+              </table>
+            </td>
+            <td valign="middle" style="padding-left:9px;font-size:17px;font-weight:600;color:#1d1d1f;letter-spacing:-.2px">Canflow</td>
+          </tr>
+        </table>
       </div>
       <div style="padding:22px 32px 34px">${inner}</div>
     </div>
