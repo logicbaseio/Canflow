@@ -27,6 +27,49 @@ const app = new Hono().basePath("/api");
 
 app.use("*", cors());
 
+/* ----------------------------- Rate limiting (Neon-backed, IP fixed-window) ----------------------------- */
+
+const clientIp = (c: Context): string =>
+  (c.req.header("x-forwarded-for")?.split(",")[0] ?? c.req.header("x-real-ip") ?? "unknown").trim();
+
+/**
+ * Fixed-window per-IP limiter backed by Postgres so it holds across edge
+ * instances. Returns true if the request is allowed, false if over the limit.
+ * Fails open on any DB hiccup so a limiter outage never blocks the app.
+ */
+async function rateLimit(c: Context, name: string, limit: number, windowSec: number): Promise<boolean> {
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const windowStart = nowSec - (nowSec % windowSec);
+    const bucket = `${name}:${clientIp(c)}`;
+    const row = await one<{ count: number }>(
+      `INSERT INTO rate_limits (bucket, window_start, count) VALUES ($1, $2, 1)
+       ON CONFLICT (bucket, window_start) DO UPDATE SET count = rate_limits.count + 1
+       RETURNING count`,
+      [bucket, windowStart]
+    );
+    // Best-effort cleanup of stale windows (~1% of calls).
+    if (Math.random() < 0.01) query("DELETE FROM rate_limits WHERE window_start < $1", [nowSec - 3600]).catch(() => {});
+    return (row?.count ?? 1) <= limit;
+  } catch {
+    return true;
+  }
+}
+
+// Server-to-server callbacks (Stripe / Neon) are authenticated by signature or
+// secret, not by IP, so they're exempt from the per-IP mutation limit.
+const RL_EXEMPT = new Set(["/api/billing/webhook", "/api/auth/email"]);
+
+app.use("*", async (c, next) => {
+  const m = c.req.method;
+  if ((m === "POST" || m === "PUT" || m === "DELETE" || m === "PATCH") && !RL_EXEMPT.has(new URL(c.req.url).pathname)) {
+    if (!(await rateLimit(c, "api", 120, 60))) {
+      return c.json({ error: "Too many requests. Please slow down and try again in a minute." }, 429);
+    }
+  }
+  await next();
+});
+
 /* ----------------------------- Auth (Neon Auth / Better Auth) ----------------------------- */
 
 const JWKS_URL =
@@ -403,6 +446,7 @@ app.post("/public/:publicKey/tasks/:id/vote", zValidator("json", VoteTaskSchema)
 /* ----------------------------- Invitations (auth + ownership) ----------------------------- */
 
 app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) => {
+  if (!(await rateLimit(c, "invite", 20, 60))) return c.json({ error: "Too many invites at once. Please wait a minute." }, 429);
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
@@ -561,6 +605,7 @@ const stripePrice = () => process.env.STRIPE_PRICE_ID || "";
 
 // Start a Stripe Checkout session for a Pro subscription; returns the hosted checkout URL.
 app.post("/billing/checkout", async (c) => {
+  if (!(await rateLimit(c, "checkout", 8, 60))) return c.json({ error: "Too many checkout attempts. Please wait a minute." }, 429);
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   if (!stripeKey() || !stripePrice()) return c.json({ error: "Billing isn't configured yet." }, 503);

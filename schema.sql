@@ -129,3 +129,12 @@ FROM boards b
 CROSS JOIN (VALUES ('To Do', 0, '#e2e8f0'), ('In Progress', 1, '#fef3c7'), ('Done', 2, '#d1fae5')) AS c(title, position, color)
 WHERE b.public_key = 'demo-kanban-0001'
   AND NOT EXISTS (SELECT 1 FROM columns WHERE board_id = b.id);
+
+-- Per-IP rate limiting (fixed-window counters). Backs src/server/app.ts rateLimit().
+CREATE TABLE IF NOT EXISTS rate_limits (
+  bucket text NOT NULL,
+  window_start bigint NOT NULL,
+  count int NOT NULL DEFAULT 0,
+  PRIMARY KEY (bucket, window_start)
+);
+CREATE INDEX IF NOT EXISTS rate_limits_window_idx ON rate_limits (window_start);
