@@ -30,7 +30,7 @@ export default function BetaColumn({
 }: BetaColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
-  // "Fix with…" only makes sense before work starts — hide it once a card is in
+  // "Fix with…" only makes sense before work starts - hide it once a card is in
   // a Fixing / Verified / Shipped phase (already being fixed, fixed, or done).
   const fixable = !['fixing', 'fixed', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
 

@@ -125,7 +125,7 @@ export default function InvitedUserPage() {
         <div className="min-w-0">
           <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{data.board.title}</h1>
           <p className="truncate text-[12px] text-ink-subtle">
-            Beta testing — add bug reports to the “{allowedColumn?.title}” phase
+            Beta testing - add bug reports to the “{allowedColumn?.title}” phase
           </p>
         </div>
       </header>

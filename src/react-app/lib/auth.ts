@@ -18,7 +18,7 @@ export type SessionState = {
 
 /**
  * Reactive session hook. The SDK's TS types mislabel `useSession` as a nanostore
- * atom, but the React adapter exposes it as a hook — so we call it directly.
+ * atom, but the React adapter exposes it as a hook - so we call it directly.
  */
 export function useSession(): SessionState {
   return (authClient.useSession as unknown as () => SessionState)();

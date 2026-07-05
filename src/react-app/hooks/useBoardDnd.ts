@@ -33,7 +33,7 @@ export function useBoardDnd(board: BoardWithColumns | null, refetch: () => void)
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const dragging = useRef(false);
 
-  // Sync from the server whenever fresh data arrives — but never mid-drag,
+  // Sync from the server whenever fresh data arrives - but never mid-drag,
   // or we'd yank the card out from under the cursor.
   useEffect(() => {
     if (board && !dragging.current) setColumns(board.columns as ColumnWithTasks[]);

@@ -82,7 +82,7 @@ export default function Home() {
 
             <h1 className="text-center text-[22px] font-semibold tracking-tight mb-1.5">Start a board</h1>
             <p className="text-center text-[13px] text-ink-muted mb-7">
-              Plan tasks and tickets, ship roadmaps, and run beta tests — all in one minimal workspace.
+              Plan tasks and tickets, ship roadmaps, and run beta tests - all in one minimal workspace.
             </p>
 
             <div className="card shadow-subtle p-1.5">

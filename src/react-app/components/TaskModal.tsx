@@ -296,7 +296,7 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
               >
                 {imgLoading ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} />}
                 <span className="text-[12.5px] font-medium">{imgLoading ? 'Processing…' : 'Add an image for reference'}</span>
-                <span className="text-[11px] text-ink-subtle">PNG, JPG — resized automatically</span>
+                <span className="text-[11px] text-ink-subtle">PNG, JPG - resized automatically</span>
               </button>
             )}
             {imgError && <p className="mt-1.5 text-[12px] text-danger">{imgError}</p>}

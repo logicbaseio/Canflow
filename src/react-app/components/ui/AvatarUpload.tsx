@@ -59,7 +59,7 @@ export default function AvatarUpload({ src, fallback, onChange, size = 64, shape
             </button>
           )}
         </div>
-        {err ? <p className="text-[11.5px] text-danger">{err}</p> : <p className="text-[11px] text-ink-subtle">PNG or JPG — resized automatically.</p>}
+        {err ? <p className="text-[11.5px] text-danger">{err}</p> : <p className="text-[11px] text-ink-subtle">PNG or JPG - resized automatically.</p>}
       </div>
     </div>
   );

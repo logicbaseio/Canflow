@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, ArrowRight, Building2, Sparkles, LayoutGrid, Map, FlaskConical, Check } from 'lucide-react';
+import { Loader2, ArrowRight, Building2, LayoutGrid, Map, FlaskConical, Check } from 'lucide-react';
 import { authClient, useSession, authedFetch } from '@/react-app/lib/auth';
 import AvatarUpload from '@/react-app/components/ui/AvatarUpload';
 
@@ -21,9 +21,16 @@ export default function OnboardingModal({ onDone }: { onDone?: () => void }) {
   useEffect(() => {
     authedFetch('/api/plan')
       .then((r) => (r.ok ? r.json() : null))
-      .then((p) => { if (p && p.onboarded === false) { setShow(true); setName(session?.user?.name || ''); } })
+      .then((p) => {
+        if (p && p.onboarded === false) {
+          setShow(true);
+          // Pre-fill name + photo from the session (populated from Google on social sign-up).
+          setName(session?.user?.name || '');
+          if (session?.user?.image) setImage(session.user.image);
+        }
+      })
       .catch(() => {});
-  }, [session?.user?.name]);
+  }, [session?.user?.name, session?.user?.image]);
 
   if (!show) return null;
 
@@ -62,10 +69,10 @@ export default function OnboardingModal({ onDone }: { onDone?: () => void }) {
         <div className="p-6">
           {cur === 'welcome' && (
             <div className="text-center">
-              <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-soft)]"><Sparkles size={22} className="text-brand" /></span>
+              <CanflowMark className="mx-auto mb-4 h-12 w-12" />
               <h2 className="text-[20px] font-semibold tracking-tight text-ink">Welcome to Canflow 👋</h2>
               <p className="mt-2 text-[13.5px] text-ink-muted leading-relaxed">
-                Plan tasks, ship roadmaps, and run beta tests — and let Claude Code / Codex triage and fix your bugs automatically. Let's set up your workspace in 30 seconds.
+                Plan tasks, ship roadmaps, and run beta tests - and let Claude Code / Codex triage and fix your bugs automatically. Let's set up your workspace in 30 seconds.
               </p>
               <div className="mt-5 grid grid-cols-3 gap-2 text-[11.5px] text-ink-muted">
                 <div className="card p-3"><LayoutGrid size={16} className="mx-auto mb-1.5 text-ink-subtle" />Kanban</div>
@@ -98,7 +105,7 @@ export default function OnboardingModal({ onDone }: { onDone?: () => void }) {
           {cur === 'workspace' && (
             <div>
               <h2 className="text-[18px] font-semibold tracking-tight text-ink">Your workspace</h2>
-              <p className="mt-1 mb-5 text-[13px] text-ink-muted">Add your org name and logo — they'll brand your public roadmaps.</p>
+              <p className="mt-1 mb-5 text-[13px] text-ink-muted">Add your org name and logo - they'll brand your public roadmaps.</p>
               <div className="mb-4">
                 <AvatarUpload src={orgImage} onChange={setOrgImage} size={60} shape="square" label="Upload a logo"
                   fallback={<Building2 size={22} className="text-ink-subtle" />} />
@@ -118,5 +125,16 @@ export default function OnboardingModal({ onDone }: { onDone?: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CanflowMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <rect width="100" height="100" rx="22" fill="var(--accent)" />
+      <rect x="24" y="24" width="16" height="52" rx="4" fill="var(--accent-fg)" />
+      <rect x="46" y="24" width="16" height="34" rx="4" fill="var(--accent-fg)" />
+      <rect x="68" y="24" width="8" height="24" rx="3" fill="var(--accent-fg)" />
+    </svg>
   );
 }

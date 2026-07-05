@@ -110,7 +110,7 @@ export default function ShareBoardModal({ url, title = 'Check out our roadmap', 
                 </button>
               )}
             </div>
-            {igHint && <p className="mt-2 text-[11.5px] text-success">Link copied — paste it into your Instagram story or bio.</p>}
+            {igHint && <p className="mt-2 text-[11.5px] text-success">Link copied - paste it into your Instagram story or bio.</p>}
           </div>
         </div>
       </div>

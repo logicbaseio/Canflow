@@ -207,7 +207,7 @@ export default function BoardSelector({ boards, refetchBoards, onBoardSelect }: 
             onClick={() => setShowCreateForm(true)}
             className="w-full text-left px-3 py-2 text-[13px] text-ink-muted hover:text-ink transition-colors"
           >
-            No boards yet — create one
+            No boards yet - create one
           </button>
         ) : (
           <nav className="space-y-0.5">

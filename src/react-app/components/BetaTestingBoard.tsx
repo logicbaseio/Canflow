@@ -131,7 +131,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
           toast(`Invite emailed to ${inviteEmail.trim()}`);
         } else if (responseData.inviteUrl) {
           await navigator.clipboard.writeText(responseData.inviteUrl).catch(() => {});
-          toast('Invite created — link copied to clipboard');
+          toast('Invite created - link copied to clipboard');
         } else {
           toast('Invite created');
         }

@@ -161,7 +161,7 @@ export default function PublicBoardView({ publicKey }: PublicBoardViewProps) {
         )}
       </div>
 
-      <ShareBoardModal url={shareUrl} title={`${board.title} — ${isRoadmap ? 'roadmap' : 'board'}`} isOpen={shareOpen} onClose={() => setShareOpen(false)} />
+      <ShareBoardModal url={shareUrl} title={`${board.title} - ${isRoadmap ? 'roadmap' : 'board'}`} isOpen={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

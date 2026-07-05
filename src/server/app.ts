@@ -609,7 +609,7 @@ app.post("/billing/portal", async (c) => {
   }
 });
 
-// Stripe webhook — the source of truth for subscription state. No user auth (Stripe-signed).
+// Stripe webhook - the source of truth for subscription state. No user auth (Stripe-signed).
 app.post("/billing/webhook", async (c) => {
   const raw = await c.req.text();
   const sig = c.req.header("stripe-signature") || "";
@@ -951,7 +951,7 @@ app.post("/issues/:id/github", async (c) => {
     sev,
     row.category ? `**Category:** ${row.category}` : "",
     "",
-    `<sub>Filed from Canflow — board "${row.board_title}".</sub>`,
+    `<sub>Filed from Canflow - board "${row.board_title}".</sub>`,
   ].filter(Boolean).join("\n");
 
   const gh = await fetch(`https://api.github.com/repos/${row.github_repo}/issues`, {

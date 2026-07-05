@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 /**
  * Subtle, delayed loading indicator for board content.
- * Stays invisible for `delay`ms so fast (local) loads don't flash a spinner —
+ * Stays invisible for `delay`ms so fast (local) loads don't flash a spinner -
  * the content just fades in. Only slow loads reveal the spinner.
  */
 export default function BoardLoader({ delay = 160 }: { delay?: number }) {

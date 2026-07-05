@@ -1,6 +1,6 @@
 import confetti from "canvas-confetti";
 
-/** A tasteful two-burst confetti pop — fired when a new board is created. */
+/** A tasteful two-burst confetti pop - fired when a new board is created. */
 export function celebrate() {
   const colors = ["#2f6feb", "#2f9e6f", "#c98a1b", "#8b5cf6", "#e2547d", "#1d1d1f"];
   const base = {

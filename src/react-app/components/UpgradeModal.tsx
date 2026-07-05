@@ -6,7 +6,7 @@ const PRO_FEATURES = [
   'Unlimited boards',
   'Unlimited beta testers',
   'Unlimited autonomous agent actions',
-  'GitHub bridge — open & sync issues',
+  'GitHub bridge - open & sync issues',
   'Full activity history (no 14-day limit)',
   'Custom organization branding',
 ];
@@ -44,7 +44,7 @@ export default function UpgradeModal({ isOpen, onClose, reason, price = 7 }: Upg
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.url) { window.location.href = data.url; return; }
-      if (res.status === 503) setNotice("Card payments launch shortly — we'll email you the moment Pro is live.");
+      if (res.status === 503) setNotice("Card payments launch shortly - we'll email you the moment Pro is live.");
       else setNotice(data.error || 'Could not start checkout. Please try again.');
     } catch {
       setNotice('Could not start checkout. Please try again.');
@@ -88,7 +88,7 @@ export default function UpgradeModal({ isOpen, onClose, reason, price = 7 }: Upg
             </div>
           ) : (
             <button onClick={upgrade} disabled={pending} className="btn btn-primary w-full h-10">
-              {pending ? <Loader2 size={16} className="animate-spin" /> : `Upgrade to Pro — $${price}/mo`}
+              {pending ? <Loader2 size={16} className="animate-spin" /> : `Upgrade to Pro - $${price}/mo`}
             </button>
           )}
           <p className="text-center text-[11px] text-ink-subtle">Secure checkout via Stripe · cancel anytime.</p>

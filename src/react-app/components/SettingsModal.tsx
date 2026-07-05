@@ -160,7 +160,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  // Legacy tokens (created before key storage) can't be revealed — recreate a fresh, copyable one.
+  // Legacy tokens (created before key storage) can't be revealed - recreate a fresh, copyable one.
   const recreateToken = async (old: TokenRow) => {
     try {
       const res = await authedFetch('/api/tokens', {
@@ -407,7 +407,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   {createdToken && (
                     <div className="mt-3 max-w-lg rounded-xl border border-line p-3.5" style={{ background: 'color-mix(in srgb, var(--success) 8%, transparent)' }}>
-                      <p className="text-[12.5px] font-medium text-ink mb-2">Copy your token now — it won't be shown again.</p>
+                      <p className="text-[12.5px] font-medium text-ink mb-2">Copy your token now - it won't be shown again.</p>
                       <div className="flex items-center gap-2">
                         <code className="flex-1 truncate rounded-lg bg-surface px-3 py-2 text-[12px] font-mono text-ink border border-line">{createdToken}</code>
                         <button onClick={() => copy(createdToken, 'tok')} className="btn btn-outline h-9 px-3">{copied === 'tok' ? <Check size={15} /> : <Copy size={15} />}</button>
@@ -433,7 +433,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               {copied === `row-${t.id}` ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy key</>}
                             </button>
                           ) : (
-                            <button onClick={() => recreateToken(t)} className="btn btn-ghost h-8 px-2.5 text-ink-muted gap-1.5 text-[12px]" title="This token predates key storage — recreate a copyable one">
+                            <button onClick={() => recreateToken(t)} className="btn btn-ghost h-8 px-2.5 text-ink-muted gap-1.5 text-[12px]" title="This token predates key storage - recreate a copyable one">
                               <RefreshCw size={14} /> Recreate
                             </button>
                           )}
@@ -467,7 +467,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </div>
 
                   <p className="mt-3.5 text-[11.5px] text-ink-subtle leading-relaxed">
-                    <code className="font-mono">canflow-mcp</code> is published on npm. Create a token above and it's filled into these commands automatically — just copy and run. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Issues Identified' phase, fix them, and move each to Fixing then Verified."</span>
+                    <code className="font-mono">canflow-mcp</code> is published on npm. Create a token above and it's filled into these commands automatically - just copy and run. Then prompt your agent: <span className="text-ink-muted italic">"Pull the bugs from my Canflow 'Issues Identified' phase, fix them, and move each to Fixing then Verified."</span>
                   </p>
                 </div>
 
@@ -483,7 +483,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <AgentCard
                     logo={<ClaudeCodeLogo className="h-8 w-8" />}
                     name="canflow-agent"
-                    hint="Run in your repo — verifies, fixes & moves cards"
+                    hint="Run in your repo - verifies, fixes & moves cards"
                     code={loopCmd}
                     onCopy={() => copy(loopCmd, 'loop')}
                     copied={copied === 'loop'}
@@ -582,12 +582,12 @@ function BillingTab({ plan, onUpgrade }: { plan: PlanInfo | null; onUpgrade: () 
             <p className="mt-0.5 text-[12.5px] text-ink-subtle">
               {plan.trialing
                 ? `You're on the Pro trial. Upgrade to keep Pro after it ends.`
-                : isPro ? `Thanks for supporting Canflow 💛` : `Everything you need to try Canflow — with limits.`}
+                : isPro ? `Thanks for supporting Canflow 💛` : `Everything you need to try Canflow - with limits.`}
             </p>
           </div>
           {!isPro ? (
             <button onClick={onUpgrade} className="btn btn-primary h-9 px-4 shrink-0">
-              <Sparkles size={15} /> Upgrade — ${plan.price.pro_monthly}/mo
+              <Sparkles size={15} /> Upgrade - ${plan.price.pro_monthly}/mo
             </button>
           ) : plan.manageable ? (
             <button onClick={manageBilling} className="btn btn-outline h-9 px-4 shrink-0">Manage billing</button>

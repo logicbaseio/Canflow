@@ -306,7 +306,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
         onSave={handleTaskSave}
       />
 
-      <ShareBoardModal url={publicUrl} title={`${board.title} — roadmap`} isOpen={shareOpen} onClose={() => setShareOpen(false)} />
+      <ShareBoardModal url={publicUrl} title={`${board.title} - roadmap`} isOpen={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }
