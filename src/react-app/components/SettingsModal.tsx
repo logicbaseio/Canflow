@@ -535,6 +535,9 @@ function BillingTab({ plan, onUpgrade }: { plan: PlanInfo | null; onUpgrade: () 
     return <div className="flex items-center gap-2 text-[13px] text-ink-muted"><Loader2 size={15} className="animate-spin" /> Loading plan…</div>;
   }
   const isPro = plan.plan === 'pro';
+  // On a trial the user has Pro *access* but hasn't paid, so they still need an
+  // Upgrade button. Only a paying subscriber gets "Manage billing" instead.
+  const isPaidPro = isPro && !plan.trialing;
   const trialDays = plan.trialing && plan.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(plan.trial_ends_at).getTime() - Date.now()) / 86_400_000))
     : 0;
@@ -585,7 +588,7 @@ function BillingTab({ plan, onUpgrade }: { plan: PlanInfo | null; onUpgrade: () 
                 : isPro ? `Thanks for supporting Canflow 💛` : `Everything you need to try Canflow - with limits.`}
             </p>
           </div>
-          {!isPro ? (
+          {!isPaidPro ? (
             <button onClick={onUpgrade} className="btn btn-primary h-9 px-4 shrink-0">
               <Sparkles size={15} /> Upgrade - ${plan.price.pro_monthly}/mo
             </button>
