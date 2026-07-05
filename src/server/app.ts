@@ -145,12 +145,13 @@ const FREE = { boards: 2, testers: 3, agentActions: 30, historyDays: 14 };
 
 type PlanRow = { plan: string | null; trial_ends_at: string | null; agent_month: string | null; agent_count: number | null };
 
-// Load the account's plan row, creating it (and starting a 14-day trial) on first touch.
+// Load the account's plan row, creating it on first touch. New accounts start on
+// the Free plan (no trial) and upgrade to Pro when they choose.
 async function ensureSettings(uid: string): Promise<PlanRow> {
   const existing = await one<PlanRow>("SELECT plan, trial_ends_at, agent_month, agent_count FROM user_settings WHERE user_id = $1", [uid]);
   if (existing) return existing;
   const created = await one<PlanRow>(
-    `INSERT INTO user_settings (user_id, trial_ends_at, updated_at) VALUES ($1, now() + interval '14 days', now())
+    `INSERT INTO user_settings (user_id, updated_at) VALUES ($1, now())
      ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
      RETURNING plan, trial_ends_at, agent_month, agent_count`,
     [uid]
