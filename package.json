@@ -11,6 +11,7 @@
     "@neondatabase/auth": "^0.4.2-beta",
     "@neondatabase/auth-ui": "^0.2.1-beta",
     "@neondatabase/serverless": "^0.10.4",
+    "@sentry/react": "^8.55.2",
     "@types/canvas-confetti": "^1.9.0",
     "canvas-confetti": "^1.9.4",
     "date-fns": "^4.1.0",

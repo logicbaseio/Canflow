@@ -5,6 +5,7 @@ import { jwtVerify, createRemoteJWKSet } from "jose";
 import type { Context } from "hono";
 import { stripeFetch, verifyStripeEvent } from "./stripe";
 import { buildAuthEmail } from "./auth-emails";
+import { reportServerError } from "./monitoring";
 import {
   CreateBoardSchema,
   UpdateBoardSchema,
@@ -68,6 +69,13 @@ app.use("*", async (c, next) => {
     }
   }
   await next();
+});
+
+// Report any unhandled error thrown by a route to Sentry (no-ops without a DSN).
+app.onError((err, c) => {
+  reportServerError(err, { path: new URL(c.req.url).pathname, method: c.req.method });
+  console.error("api error", err);
+  return c.json({ error: "Internal error" }, 500);
 });
 
 /* ----------------------------- Auth (Neon Auth / Better Auth) ----------------------------- */
