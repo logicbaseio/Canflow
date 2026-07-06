@@ -472,8 +472,9 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
   const token = crypto.randomUUID();
 
   try {
-    const board = await one<{ title: string }>("SELECT title FROM boards WHERE id = $1", [data.board_id]);
+    const board = await one<{ title: string; board_type: string }>("SELECT title, board_type FROM boards WHERE id = $1", [data.board_id]);
     if (!board) return c.json({ error: "Board not found" }, 404);
+    const isBeta = board.board_type === "beta-testing";
 
     let columnName: string | null = null;
     if (data.column_id) {
@@ -501,8 +502,8 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
           body: JSON.stringify({
             from,
             to: data.email,
-            subject: `You're invited to beta test: ${board.title}`,
-            html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">Beta Testing Invitation</h1><h2 style="color:#1f2937">${board.title}</h2>${columnName ? `<p style="color:#6b7280">Phase: <strong>${columnName}</strong></p>` : ""}<p style="color:#6b7280">Help us improve by reporting bugs and feedback.</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">Join Beta Testing</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
+            subject: isBeta ? `You're invited to beta test: ${board.title}` : `You're invited to collaborate on: ${board.title}`,
+            html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">${isBeta ? "Beta Testing Invitation" : "You're invited"}</h1><h2 style="color:#1f2937">${board.title}</h2>${columnName ? `<p style="color:#6b7280">Phase: <strong>${columnName}</strong></p>` : ""}<p style="color:#6b7280">${isBeta ? "Help us improve by reporting bugs and feedback." : `You've been given access to the ${columnName ? `"${columnName}" phase` : "board"}. Add and view items there.`}</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">${isBeta ? "Join Beta Testing" : "Open the board"}</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
           }),
         });
         const rd = (await response.json()) as { message?: string };

@@ -117,6 +117,8 @@ export default function InvitedUserPage() {
   }
 
   const allowedColumn = data.board.columns.find(col => col.id === data.allowedColumnId);
+  const isBeta = data.board.board_type === 'beta-testing';
+  const addLabel = isBeta ? 'Report bug / issue' : 'Add item';
 
   return (
     <div className="min-h-screen bg-app text-ink">
@@ -125,7 +127,9 @@ export default function InvitedUserPage() {
         <div className="min-w-0">
           <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{data.board.title}</h1>
           <p className="truncate text-[12px] text-ink-subtle">
-            Beta testing - add bug reports to the “{allowedColumn?.title}” phase
+            {isBeta
+              ? <>Beta testing - add bug reports to the “{allowedColumn?.title}” phase</>
+              : <>You've been invited to the “{allowedColumn?.title}” phase</>}
           </p>
         </div>
       </header>
@@ -154,7 +158,7 @@ export default function InvitedUserPage() {
                     <h3 className="text-[13px] font-medium leading-5 text-ink flex-1">
                       {task.title}
                     </h3>
-                    {task.intensity > 0 && (
+                    {isBeta && task.intensity > 0 && (
                       <span className={`shrink-0 px-1.5 py-0.5 rounded-md text-[11px] font-medium ${getIntensityColor(task.intensity)}`}>
                         {task.intensity}/10
                       </span>
@@ -176,20 +180,20 @@ export default function InvitedUserPage() {
               ))}
             </div>
 
-            {/* Add Bug Report Button */}
+            {/* Add item button */}
             <button
               onClick={() => setTaskModalOpen(true)}
               className="w-full p-4 border border-dashed border-line rounded-lg text-ink-subtle hover:border-line-strong hover:text-ink-muted transition-colors flex items-center justify-center gap-2"
             >
               <Plus size={16} />
-              <span className="text-[13px] font-medium">Report bug / issue</span>
+              <span className="text-[13px] font-medium">{addLabel}</span>
             </button>
           </div>
         )}
 
         <TaskModal
           columnId={data.allowedColumnId || undefined}
-          boardType="beta-testing"
+          boardType={data.board.board_type as 'kanban' | 'roadmap' | 'beta-testing'}
           categories={categories}
           isOpen={taskModalOpen}
           onClose={() => setTaskModalOpen(false)}

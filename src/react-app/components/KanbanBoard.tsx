@@ -95,7 +95,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
   return (
     <div className="h-full flex flex-col bg-app animate-board-in">
       <header className="flex items-center justify-between px-6 h-14 border-b border-line shrink-0">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 pr-4">
           <EditableTitle boardId={board.id} value={board.title} onRenamed={() => { refetch(); onBoardChanged?.(); }} />
           {board.description && <p className="truncate text-[12px] text-ink-subtle pl-1.5 -ml-1.5">{board.description}</p>}
         </div>

@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Plus, Share2, Globe, Eye, Copy, ArrowUp, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Share2, Globe, Eye, Copy, ArrowUp, MoreHorizontal, Edit2, Trash2, UserPlus, X } from 'lucide-react';
 import TaskModal from './TaskModal';
 import ShareBoardModal from './ShareBoardModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
+import Select from '@/react-app/components/ui/Select';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import PendingCard from '@/react-app/components/ui/PendingCard';
 import { useDialog } from '@/react-app/components/ui/Dialog';
+import { authedFetch } from '@/react-app/lib/auth';
 import { celebrate } from '@/react-app/lib/confetti';
 import { useBoard, createTask, updateTask, createColumn, updateColumn, deleteColumn, updateBoard } from '@/react-app/hooks/useApi';
 import type { Task, Column, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
@@ -31,8 +33,47 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   const [showPublicMenu, setShowPublicMenu] = useState(false);
   const [columnMenu, setColumnMenu] = useState<number | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
+  const [inviting, setInviting] = useState(false);
 
   const publicUrl = board?.public_key ? `${window.location.origin}/public/${board.public_key}` : '';
+
+  const openInvite = (columnId?: number) => {
+    setInviteColumnId(columnId ?? null);
+    setInviteEmail('');
+    setShowInviteModal(true);
+  };
+
+  const handleInviteUser = async () => {
+    if (!inviteEmail.trim() || !inviteColumnId) return;
+    setInviting(true);
+    try {
+      const res = await authedFetch('/api/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board_id: boardId, column_id: inviteColumnId, email: inviteEmail.trim(), invited_by: 'admin' }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (d.emailSent) toast(`Invite emailed to ${inviteEmail.trim()}`);
+        else if (d.inviteUrl) { await navigator.clipboard.writeText(d.inviteUrl).catch(() => {}); toast('Invite created - link copied to clipboard'); }
+        else toast('Invite created');
+        setShowInviteModal(false);
+        setInviteEmail('');
+        setInviteColumnId(null);
+      } else if (d.upgrade) {
+        toast(d.error || 'Upgrade to invite more members');
+      } else {
+        toast(d.error || 'Failed to create invite');
+      }
+    } catch (e) {
+      console.error('invite failed', e);
+      toast('Failed to create invite');
+    }
+    setInviting(false);
+  };
 
   const handleAddTask = (columnId: number) => {
     setNewTaskColumnId(columnId);
@@ -132,7 +173,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   return (
     <div className="h-full flex flex-col bg-app animate-board-in">
       <header className="flex items-center justify-between px-6 h-14 border-b border-line shrink-0">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 pr-4">
           <EditableTitle boardId={board.id} value={board.title} onRenamed={() => { refetch(); onBoardChanged?.(); }} />
           <p className="truncate text-[12px] text-ink-subtle pl-1.5 -ml-1.5">Roadmap</p>
         </div>
@@ -196,6 +237,10 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
             )}
           </div>
 
+          <button onClick={() => openInvite()} className="btn btn-outline h-8 px-3">
+            <UserPlus size={15} /> Invite
+          </button>
+
           <button onClick={handleAddColumn} className="btn btn-outline h-8 px-3">
             <Plus size={15} /> Add column
           </button>
@@ -222,7 +267,10 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
                   {columnMenu === column.id && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setColumnMenu(null)} />
-                      <div className="menu absolute right-0 top-7 z-20 w-40 py-1">
+                      <div className="menu absolute right-0 top-7 z-20 w-44 py-1">
+                        <button className="menu-item" onClick={() => { openInvite(column.id); setColumnMenu(null); }}>
+                          <UserPlus size={14} /> Invite to this phase
+                        </button>
                         <button className="menu-item" onClick={() => { handleEditColumn(column); setColumnMenu(null); }}>
                           <Edit2 size={14} /> Rename column
                         </button>
@@ -307,6 +355,42 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
       />
 
       <ShareBoardModal url={publicUrl} title={`${board.title} - roadmap`} isOpen={shareOpen} onClose={() => setShareOpen(false)} />
+
+      {/* Invite a member to a specific phase */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'var(--overlay)' }}>
+          <div className="card w-full max-w-md shadow-pop">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-line">
+              <h2 className="text-[14px] font-semibold text-ink">Invite to a phase</h2>
+              <button onClick={() => setShowInviteModal(false)} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-[12.5px] text-ink-muted -mt-1">The invited member can view and add items to the phase you choose - nothing else.</p>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-ink-muted">Email address</label>
+                <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="field" placeholder="teammate@company.com" autoFocus />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-ink-muted">Give access to phase</label>
+                <Select
+                  value={inviteColumnId ? String(inviteColumnId) : ''}
+                  onChange={(v) => setInviteColumnId(v ? parseInt(v) : null)}
+                  options={board.columns.map((column) => ({ value: String(column.id), label: column.title }))}
+                  placeholder="Select a phase…"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowInviteModal(false)} className="btn btn-outline flex-1 h-9">Cancel</button>
+                <button onClick={handleInviteUser} disabled={!inviteEmail.trim() || !inviteColumnId || inviting} className="btn btn-primary flex-1 h-9">
+                  {inviting ? 'Sending…' : 'Send invite'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
