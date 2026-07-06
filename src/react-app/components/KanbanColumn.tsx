@@ -13,7 +13,6 @@ interface KanbanColumnProps {
   onAddTask: (columnId: number) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: number) => void;
-  onFixTask: (task: Task, agent: 'claude' | 'codex') => void;
   onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: number) => void;
 }
@@ -24,13 +23,11 @@ export default function KanbanColumn({
   onAddTask,
   onEditTask,
   onDeleteTask,
-  onFixTask,
   onEditColumn,
   onDeleteColumn,
 }: KanbanColumnProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { isOver, setNodeRef } = useDroppable({ id: colDndId(column.id) });
-  const fixable = !['fixing', 'fixed', 'verified', 'shipped'].includes(column.title.trim().toLowerCase());
 
   return (
     <div className="flex w-72 shrink-0 flex-col">
@@ -75,7 +72,7 @@ export default function KanbanColumn({
       >
         <SortableContext items={column.tasks.map((t) => taskDndId(t.id))} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFix={fixable ? onFixTask : undefined} />
+            <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} />
           ))}
         </SortableContext>
 

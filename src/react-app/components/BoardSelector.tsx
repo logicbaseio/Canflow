@@ -18,7 +18,7 @@ interface BoardSelectorProps {
 }
 
 const BOARD_TYPES: { value: CreateBoard['board_type']; label: string }[] = [
-  { value: 'kanban', label: 'Kanban' },
+  { value: 'kanban', label: 'Task Manager' },
   { value: 'roadmap', label: 'Roadmap' },
   { value: 'beta-testing', label: 'Beta' },
 ];
@@ -26,7 +26,7 @@ const BOARD_TYPES: { value: CreateBoard['board_type']; label: string }[] = [
 function typeLabel(t: string) {
   if (t === 'roadmap') return 'Roadmap';
   if (t === 'beta-testing') return 'Beta testing';
-  return 'Kanban';
+  return 'Task Manager';
 }
 
 /** Near-black / default board colors map to the theme accent so the dot stays visible in dark mode. */

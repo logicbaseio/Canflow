@@ -4,7 +4,6 @@ import { CSS } from '@dnd-kit/utilities';
 import { taskDndId } from '@/react-app/hooks/useBoardDnd';
 import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { format } from 'date-fns';
-import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 import { AgentStatusBadge } from '@/react-app/components/ui/AgentStatusBadge';
 import type { Task } from '@/shared/types';
 
@@ -12,7 +11,6 @@ interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
-  onFix?: (task: Task, agent: 'claude' | 'codex') => void;
 }
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -21,7 +19,7 @@ const PRIORITY_DOT: Record<string, string> = {
   low: 'var(--success)',
 };
 
-export default function TaskCard({ task, onEdit, onDelete, onFix }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: taskDndId(task.id) });
 
@@ -106,24 +104,6 @@ export default function TaskCard({ task, onEdit, onDelete, onFix }: TaskCardProp
         </div>
       )}
 
-      {onFix && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            onClick={(e) => { e.stopPropagation(); onFix(task, 'claude'); }}
-            style={{ borderColor: 'var(--stroke-hard)' }}
-            className="inline-flex items-center gap-1.5 border rounded-none px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
-          >
-            <ClaudeCodeLogo className="h-3.5 w-3.5" /> Fix with Claude Code
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onFix(task, 'codex'); }}
-            style={{ borderColor: 'var(--stroke-hard)' }}
-            className="inline-flex items-center gap-1.5 border rounded-none px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
-          >
-            <CodexLogo className="h-3.5 w-3.5" /> Fix with Codex
-          </button>
-        </div>
-      )}
     </div>
   );
 }

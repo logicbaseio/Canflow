@@ -75,7 +75,7 @@ export default function OnboardingModal({ onDone }: { onDone?: () => void }) {
                 Plan tasks, ship roadmaps, and run beta tests - and let Claude Code / Codex triage and fix your bugs automatically. Let's set up your workspace in 30 seconds.
               </p>
               <div className="mt-5 grid grid-cols-3 gap-2 text-[11.5px] text-ink-muted">
-                <div className="card p-3"><LayoutGrid size={16} className="mx-auto mb-1.5 text-ink-subtle" />Kanban</div>
+                <div className="card p-3"><LayoutGrid size={16} className="mx-auto mb-1.5 text-ink-subtle" />Tasks</div>
                 <div className="card p-3"><Map size={16} className="mx-auto mb-1.5 text-ink-subtle" />Roadmaps</div>
                 <div className="card p-3"><FlaskConical size={16} className="mx-auto mb-1.5 text-ink-subtle" />Beta tests</div>
               </div>

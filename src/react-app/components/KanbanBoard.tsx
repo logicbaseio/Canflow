@@ -4,7 +4,6 @@ import { Plus } from 'lucide-react';
 import KanbanColumn from './KanbanColumn';
 import TaskCard from './TaskCard';
 import TaskModal from './TaskModal';
-import FixWithModal from './FixWithModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import { useDialog } from '@/react-app/components/ui/Dialog';
@@ -24,9 +23,6 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
   const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
-  const [fixingTask, setFixingTask] = useState<Task | null>(null);
-  const [fixAgent, setFixAgent] = useState<'claude' | 'codex' | null>(null);
-  const handleFix = (task: Task, agent: 'claude' | 'codex') => { setFixAgent(agent); setFixingTask(task); };
 
   const { columns, activeTask, sensors, collisionDetection, onDragStart, onDragOver, onDragEnd } = useBoardDnd(board, refetch);
 
@@ -115,7 +111,6 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
                 onAddTask={handleAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}
-                onFixTask={handleFix}
                 onEditColumn={handleEditColumn}
                 onDeleteColumn={handleDeleteColumn}
               />
@@ -139,7 +134,6 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
         onSave={handleTaskSave}
       />
 
-      <FixWithModal task={fixingTask} boardTitle={board.title} githubRepo={board.github_repo} initialAgent={fixAgent} isOpen={!!fixingTask} onClose={() => setFixingTask(null)} />
     </div>
   );
 }
