@@ -1073,4 +1073,37 @@ app.get("/invited/:token", async (c) => {
   return c.json({ board: boardWithColumns, invitation, allowedColumnId: invitation.column_id });
 });
 
+// Invited members add items ONLY to the column they were granted. The column is
+// taken from the invite token, never the client, so access can't be widened.
+app.post("/invited/:token/tasks", async (c) => {
+  if (!(await rateLimit(c, "invited-task", 30, 60))) return c.json({ error: "Too many requests. Please wait a minute." }, 429);
+  const token = c.req.param("token");
+  const invitation = await one<{ column_id: number | null }>(
+    "SELECT column_id FROM invitations WHERE token = $1 AND status = 'pending'",
+    [token]
+  );
+  if (!invitation || !invitation.column_id) return c.json({ error: "Invalid or expired invitation" }, 404);
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title) return c.json({ error: "Title is required" }, 400);
+  const colId = invitation.column_id;
+  const posRow = await one<{ n: number }>("SELECT COALESCE(MAX(position) + 1, 0) AS n FROM tasks WHERE column_id = $1", [colId]);
+  const task = await one<Task>(
+    `INSERT INTO tasks (column_id, title, description, position, priority, start_date, due_date, category, intensity, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) RETURNING *`,
+    [
+      colId,
+      title,
+      typeof body.description === "string" ? body.description : null,
+      posRow?.n ?? 0,
+      typeof body.priority === "string" ? body.priority : null,
+      typeof body.start_date === "string" ? body.start_date : null,
+      typeof body.due_date === "string" ? body.due_date : null,
+      typeof body.category === "string" ? body.category : null,
+      typeof body.intensity === "number" ? body.intensity : 0,
+    ]
+  );
+  return c.json(task, 201);
+});
+
 export default app;
