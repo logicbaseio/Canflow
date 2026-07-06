@@ -5,6 +5,7 @@ import KanbanColumn from './KanbanColumn';
 import TaskCard from './TaskCard';
 import TaskModal from './TaskModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
+import PriorityFilter from '@/react-app/components/ui/PriorityFilter';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { useBoardDnd } from '@/react-app/hooks/useBoardDnd';
@@ -23,8 +24,12 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
   const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
+  const [priorityFilter, setPriorityFilter] = useState('');
 
   const { columns, activeTask, sensors, collisionDetection, onDragStart, onDragOver, onDragEnd } = useBoardDnd(board, refetch);
+  const displayColumns = priorityFilter
+    ? columns.map((col) => ({ ...col, tasks: col.tasks.filter((t) => t.priority === priorityFilter) }))
+    : columns;
 
   const handleAddTask = (columnId: number) => {
     setNewTaskColumnId(columnId);
@@ -95,15 +100,18 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
           <EditableTitle boardId={board.id} value={board.title} onRenamed={() => { refetch(); onBoardChanged?.(); }} />
           {board.description && <p className="truncate text-[12px] text-ink-subtle pl-1.5 -ml-1.5">{board.description}</p>}
         </div>
-        <button onClick={handleAddColumn} className="btn btn-outline h-8 px-3">
-          <Plus size={15} /> Add column
-        </button>
+        <div className="flex items-center gap-2">
+          <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
+          <button onClick={handleAddColumn} className="btn btn-outline h-8 px-3">
+            <Plus size={15} /> Add column
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 py-5">
         <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
           <div className="flex gap-4 h-full items-stretch">
-            {columns.map((column) => (
+            {displayColumns.map((column) => (
               <KanbanColumn
                 key={column.id}
                 column={column}

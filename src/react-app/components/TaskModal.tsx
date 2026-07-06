@@ -22,6 +22,7 @@ const EMPTY = {
   title: '',
   description: '',
   priority: '' as 'low' | 'medium' | 'high' | '',
+  start_date: '',
   due_date: '',
   tags: '',
   intensity: 0,
@@ -108,6 +109,7 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
         title: task.title,
         description: task.description || '',
         priority: (task.priority as 'low' | 'medium' | 'high' | '') || '',
+        start_date: task.start_date || '',
         due_date: task.due_date || '',
         tags: task.tags || '',
         intensity: task.intensity || 0,
@@ -149,6 +151,7 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
       title: formData.title,
       description: formData.description || undefined,
       priority: formData.priority || undefined,
+      start_date: formData.start_date || undefined,
       due_date: formData.due_date || undefined,
       tags: formData.tags || undefined,
       intensity: isBetaTesting ? formData.intensity : undefined,
@@ -226,19 +229,22 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
             </>
           ) : (
             <>
+              <Field label="Priority">
+                <Select
+                  value={formData.priority}
+                  onChange={(v) => setFormData({ ...formData, priority: v as 'low' | 'medium' | 'high' | '' })}
+                  options={[
+                    { value: '', label: 'None' },
+                    { value: 'low', label: 'Low', color: 'var(--success)' },
+                    { value: 'medium', label: 'Medium', color: 'var(--warning)' },
+                    { value: 'high', label: 'High', color: 'var(--danger)' },
+                  ]}
+                  placeholder="None"
+                />
+              </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Priority">
-                  <Select
-                    value={formData.priority}
-                    onChange={(v) => setFormData({ ...formData, priority: v as 'low' | 'medium' | 'high' | '' })}
-                    options={[
-                      { value: '', label: 'None' },
-                      { value: 'low', label: 'Low', color: 'var(--success)' },
-                      { value: 'medium', label: 'Medium', color: 'var(--warning)' },
-                      { value: 'high', label: 'High', color: 'var(--danger)' },
-                    ]}
-                    placeholder="None"
-                  />
+                <Field label="Start date">
+                  <DatePicker value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} placeholder="Pick a date" />
                 </Field>
                 <Field label={dateLabel}>
                   <DatePicker value={formData.due_date} onChange={(v) => setFormData({ ...formData, due_date: v })} placeholder="Pick a date" />

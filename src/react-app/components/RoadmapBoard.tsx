@@ -4,6 +4,7 @@ import TaskModal from './TaskModal';
 import ShareBoardModal from './ShareBoardModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import Select from '@/react-app/components/ui/Select';
+import PriorityFilter from '@/react-app/components/ui/PriorityFilter';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import PendingCard from '@/react-app/components/ui/PendingCard';
 import { useDialog } from '@/react-app/components/ui/Dialog';
@@ -33,6 +34,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   const [showPublicMenu, setShowPublicMenu] = useState(false);
   const [columnMenu, setColumnMenu] = useState<number | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
@@ -237,6 +239,8 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
             )}
           </div>
 
+          <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
+
           <button onClick={() => openInvite()} className="btn btn-outline h-8 px-3">
             <UserPlus size={15} /> Invite
           </button>
@@ -285,7 +289,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
 
               {/* Tasks */}
               <div className="flex-1 min-h-0 overflow-y-auto rounded-xl p-1.5 space-y-2">
-                {column.tasks.map((task) => {
+                {column.tasks.filter((task) => !priorityFilter || task.priority === priorityFilter).map((task) => {
                   const tags = task.tags ? task.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [];
                   const primaryTag = tags[0] || '';
 

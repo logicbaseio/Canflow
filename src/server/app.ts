@@ -357,9 +357,9 @@ app.post("/tasks", zValidator("json", CreateTaskSchema), async (c) => {
   const data = c.req.valid("json");
   if (!(await ownsColumn(data.column_id, uid))) return c.json({ error: "Column not found" }, 404);
   const task = await one<Task>(
-    `INSERT INTO tasks (column_id, title, description, position, priority, due_date, tags, intensity, category, image_url, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()) RETURNING *`,
-    [data.column_id, data.title, data.description ?? null, data.position, data.priority ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null, data.image_url ?? null]
+    `INSERT INTO tasks (column_id, title, description, position, priority, start_date, due_date, tags, intensity, category, image_url, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()) RETURNING *`,
+    [data.column_id, data.title, data.description ?? null, data.position, data.priority ?? null, data.start_date ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null, data.image_url ?? null]
   );
   return c.json(task, 201);
 });
@@ -385,6 +385,7 @@ app.put("/tasks/:id", zValidator("json", UpdateTaskSchema), async (c) => {
   set("description", data.description);
   set("position", data.position);
   set("priority", data.priority);
+  set("start_date", data.start_date);
   set("due_date", data.due_date);
   set("tags", data.tags);
   set("intensity", data.intensity);

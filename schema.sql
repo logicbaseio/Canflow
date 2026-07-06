@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT,
   position    INTEGER NOT NULL,
   priority    TEXT,
+  start_date  DATE,
   due_date    DATE,
   tags        TEXT,
   intensity   INTEGER DEFAULT 0,

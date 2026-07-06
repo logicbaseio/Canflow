@@ -87,12 +87,14 @@ export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
         </div>
       )}
 
-      {(task.due_date || task.upvotes > 0 || task.downvotes > 0) && (
+      {(task.start_date || task.due_date || task.upvotes > 0 || task.downvotes > 0) && (
         <div className="mt-2.5 flex items-center justify-between text-[11px] text-ink-subtle">
-          {task.due_date ? (
+          {(task.start_date || task.due_date) ? (
             <span className="inline-flex items-center gap-1">
               <Calendar size={12} />
-              {format(new Date(task.due_date), 'MMM d')}
+              {task.start_date && task.due_date
+                ? `${format(new Date(task.start_date), 'MMM d')} → ${format(new Date(task.due_date), 'MMM d')}`
+                : format(new Date(task.due_date || task.start_date!), 'MMM d')}
             </span>
           ) : <span />}
           {(task.upvotes > 0 || task.downvotes > 0) && (
