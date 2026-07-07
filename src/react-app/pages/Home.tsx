@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import BoardSelector from '@/react-app/components/BoardSelector';
 import OnboardingModal from '@/react-app/components/OnboardingModal';
+import UpgradeModal from '@/react-app/components/UpgradeModal';
 import KanbanBoard from '@/react-app/components/KanbanBoard';
 import RoadmapBoard from '@/react-app/components/RoadmapBoard';
 import BetaTestingBoard from '@/react-app/components/BetaTestingBoard';
 import { useAppContext } from '@/react-app/context/AppContext';
 import { useBoards, createBoard } from '@/react-app/hooks/useApi';
+import { authedFetch } from '@/react-app/lib/auth';
 import { celebrate } from '@/react-app/lib/confetti';
 import type { CreateBoard } from '@/shared/types';
 
 const QUICK_TYPES: { type: CreateBoard['board_type']; label: string }[] = [
-  { type: 'kanban', label: 'Kanban' },
+  { type: 'kanban', label: 'Task Manager' },
   { type: 'roadmap', label: 'Roadmap' },
   { type: 'beta-testing', label: 'Beta Testing' },
 ];
@@ -20,12 +22,34 @@ export default function Home() {
   const { state, dispatch } = useAppContext();
   const { data: boards, refetch: refetchBoards } = useBoards();
   const [creating, setCreating] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // "Go Pro" on the landing page links to /?upgrade=1 — resume that intent here.
+  const upgradeIntent = useRef(new URLSearchParams(window.location.search).get('upgrade') === '1');
+
+  const clearUpgradeParam = () => window.history.replaceState({}, '', window.location.pathname);
+  const openUpgrade = () => { upgradeIntent.current = false; clearUpgradeParam(); setUpgradeOpen(true); };
 
   useEffect(() => {
     if (boards) {
       dispatch({ type: 'SET_BOARDS', payload: boards });
     }
   }, [boards, dispatch]);
+
+  // On an upgrade intent: open the Upgrade modal once the user is onboarded and
+  // not already Pro. If onboarding is still pending, wait for it to finish (see
+  // OnboardingModal onDone below) so we don't stack two modals.
+  useEffect(() => {
+    if (!upgradeIntent.current) return;
+    authedFetch('/api/plan')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => {
+        if (!p) return;
+        if (p.plan === 'pro') { upgradeIntent.current = false; clearUpgradeParam(); return; }
+        if (p.onboarded === false) return; // resumed after onboarding completes
+        openUpgrade();
+      })
+      .catch(() => {});
+  }, []);
 
   const handleBoardSelect = (boardId: number) => {
     dispatch({ type: 'SET_SELECTED_BOARD_ID', payload: boardId });
@@ -67,7 +91,8 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-app text-ink overflow-hidden">
-      <OnboardingModal onDone={refetchBoards} />
+      <OnboardingModal onDone={() => { refetchBoards(); if (upgradeIntent.current) openUpgrade(); }} />
+      <UpgradeModal isOpen={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
       <BoardSelector boards={boards ?? null} refetchBoards={refetchBoards} onBoardSelect={handleBoardSelect} />
 
       {state.selectedBoardId && selectedBoard ? (
