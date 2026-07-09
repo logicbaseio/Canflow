@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { taskDndId } from '@/react-app/hooks/useBoardDnd';
-import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Calendar, MoreHorizontal, Edit2, Trash2, ArrowUp, ArrowDown, UserMinus } from 'lucide-react';
 import { format } from 'date-fns';
 import { AgentStatusBadge } from '@/react-app/components/ui/AgentStatusBadge';
+import { ClaudeCodeLogo, CodexLogo } from '@/react-app/components/ui/AgentLogos';
 import type { Task } from '@/shared/types';
 
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
+  onAssign?: (taskId: number, agent: 'claude' | 'codex' | null) => void;
 }
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -19,7 +21,7 @@ const PRIORITY_DOT: Record<string, string> = {
   low: 'var(--success)',
 };
 
-export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onAssign }: TaskCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: taskDndId(task.id) });
 
@@ -52,10 +54,32 @@ export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
           {showMenu && (
             <>
               <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
-              <div className="menu absolute right-0 top-7 z-20 w-44 py-1">
+              <div className="menu absolute right-0 top-7 z-20 w-52 py-1">
                 <button className="menu-item" onClick={(e) => { e.stopPropagation(); onEdit(task); setShowMenu(false); }}>
                   <Edit2 size={14} /> Edit
                 </button>
+
+                {onAssign && (
+                  <>
+                    <div className="my-1 h-px bg-line" />
+                    <div className="px-3 pt-1 pb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-subtle">Assign to agent</div>
+                    {task.agent ? (
+                      <button className="menu-item" onClick={(e) => { e.stopPropagation(); onAssign(task.id, null); setShowMenu(false); }}>
+                        <UserMinus size={14} /> Unassign agent
+                      </button>
+                    ) : (
+                      <>
+                        <button className="menu-item" onClick={(e) => { e.stopPropagation(); onAssign(task.id, 'claude'); setShowMenu(false); }}>
+                          <ClaudeCodeLogo className="h-3.5 w-3.5" /> Claude Code
+                        </button>
+                        <button className="menu-item" onClick={(e) => { e.stopPropagation(); onAssign(task.id, 'codex'); setShowMenu(false); }}>
+                          <CodexLogo className="h-3.5 w-3.5" /> Codex
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+
                 <div className="my-1 h-px bg-line" />
                 <button className="menu-item text-danger" onClick={(e) => { e.stopPropagation(); onDelete(task.id); setShowMenu(false); }}>
                   <Trash2 size={14} /> Delete

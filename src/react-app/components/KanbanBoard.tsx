@@ -7,6 +7,7 @@ import TaskModal from './TaskModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import PriorityFilter from '@/react-app/components/ui/PriorityFilter';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
+import { authedFetch } from '@/react-app/lib/auth';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { useBoardDnd } from '@/react-app/hooks/useBoardDnd';
 import { useBoard, createTask, updateTask, deleteTask, createColumn, updateColumn, deleteColumn } from '@/react-app/hooks/useApi';
@@ -19,7 +20,7 @@ interface KanbanBoardProps {
 
 export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProps) {
   const { data: board, loading, refetch } = useBoard(boardId);
-  const { confirm, prompt } = useDialog();
+  const { confirm, prompt, toast } = useDialog();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<number | null>(null);
@@ -46,6 +47,17 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
   const handleDeleteTask = async (taskId: number) => {
     if (!(await confirm({ title: 'Delete task', message: 'This task will be permanently removed.', confirmText: 'Delete', danger: true }))) return;
     try { await deleteTask(taskId); refetch(); } catch (e) { console.error('Failed to delete task:', e); }
+  };
+
+  const handleAssignTask = async (taskId: number, agent: 'claude' | 'codex' | null) => {
+    try {
+      await authedFetch(`/api/tasks/${taskId}/assign`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent: agent ?? '' }),
+      });
+      refetch();
+      if (agent) toast(`Queued for ${agent === 'codex' ? 'Codex' : 'Claude Code'} — run your agent to pick it up`);
+    } catch (e) { console.error('Failed to assign agent:', e); toast('Could not assign agent'); }
   };
 
   const handleTaskSave = async (data: CreateTask | UpdateTask) => {
@@ -119,6 +131,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
                 onAddTask={handleAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}
+                onAssignTask={handleAssignTask}
                 onEditColumn={handleEditColumn}
                 onDeleteColumn={handleDeleteColumn}
               />

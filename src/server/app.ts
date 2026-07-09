@@ -888,6 +888,29 @@ app.post("/issues/:id/move", async (c) => {
 });
 
 // Set agent attribution + status (badge) without moving the card.
+// A human assigns a card to a coding agent, queuing it for pickup via MCP. This
+// is a human action (not an agent write), so it does NOT count against the
+// monthly agent-action meter. Pass agent:"" to unassign.
+app.post("/tasks/:id/assign", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  if (!(await ownsTask(id, uid))) return c.json({ error: "Task not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const agent = cleanAgent(body.agent);
+  const updated = agent
+    ? await one(
+        "UPDATE tasks SET agent = $1, agent_status = 'queued', agent_note = NULL, updated_at = now() WHERE id = $2 RETURNING *",
+        [agent, id]
+      )
+    : await one(
+        "UPDATE tasks SET agent = NULL, agent_status = NULL, agent_note = NULL, updated_at = now() WHERE id = $1 RETURNING *",
+        [id]
+      );
+  if (agent) await addComment(id, null, `Queued for ${agent === "codex" ? "Codex" : "Claude Code"}.`, true);
+  return c.json(updated);
+});
+
 app.post("/issues/:id/agent", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);

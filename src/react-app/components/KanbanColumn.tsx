@@ -13,6 +13,7 @@ interface KanbanColumnProps {
   onAddTask: (columnId: number) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: number) => void;
+  onAssignTask: (taskId: number, agent: 'claude' | 'codex' | null) => void;
   onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: number) => void;
 }
@@ -23,6 +24,7 @@ export default function KanbanColumn({
   onAddTask,
   onEditTask,
   onDeleteTask,
+  onAssignTask,
   onEditColumn,
   onDeleteColumn,
 }: KanbanColumnProps) {
@@ -72,7 +74,7 @@ export default function KanbanColumn({
       >
         <SortableContext items={column.tasks.map((t) => taskDndId(t.id))} strategy={verticalListSortingStrategy}>
           {column.tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} />
+            <TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} onAssign={onAssignTask} />
           ))}
         </SortableContext>
 

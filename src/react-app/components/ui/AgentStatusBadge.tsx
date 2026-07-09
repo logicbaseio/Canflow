@@ -2,11 +2,13 @@ import { agentIdentity } from './AgentLogos';
 
 // status → { label, connector, colour token }. Covers both the autonomous runner's
 // vocabulary and the manual update_issue_agent set; unknown values fall back gracefully.
-const STATUS: Record<string, { verb: string; by: string; tone: string }> = {
+const STATUS: Record<string, { verb: string; by: string; tone: string; live?: boolean }> = {
+  queued:         { verb: 'Queued for', by: '', tone: 'var(--text-muted)', live: true },
   confirmed:      { verb: 'Confirmed', by: 'by', tone: 'var(--text-muted)' },
-  working:        { verb: 'Working',   by: 'by', tone: 'var(--warning)' },
-  fixing:         { verb: 'Fixing',    by: 'by', tone: 'var(--blue)' },
+  working:        { verb: 'Working',   by: 'by', tone: 'var(--warning)', live: true },
+  fixing:         { verb: 'Fixing',    by: 'by', tone: 'var(--blue)', live: true },
   fixed:          { verb: 'Fixed',     by: 'by', tone: 'var(--blue)' },
+  done:           { verb: 'Done',      by: 'by', tone: 'var(--success)' },
   verified:       { verb: 'Verified',  by: 'by', tone: 'var(--success)' },
   'needs-review': { verb: 'Needs review', by: '·', tone: 'var(--warning)' },
   needs_review:   { verb: 'Needs review', by: '·', tone: 'var(--warning)' },
@@ -25,6 +27,7 @@ export function AgentStatusBadge({ agent, status, className }: { agent?: string 
       style={{ color: s.tone }}
       title={`${s.verb} ${s.by} ${name}`}
     >
+      {s.live && <span className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0" style={{ background: 'currentColor' }} />}
       <Logo className="h-3.5 w-3.5 shrink-0" />
       {s.verb} {s.by} {name}
     </span>
