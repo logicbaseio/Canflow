@@ -279,6 +279,8 @@ app.put("/boards/:id", zValidator("json", UpdateBoardSchema), async (c) => {
   set("public_theme", data.public_theme);
   set("invite_mode", data.invite_mode);
   set("github_repo", data.github_repo);
+  if (data.autopilot_agent !== undefined) { updates.push(`autopilot_agent = $${i++}`); values.push(data.autopilot_agent || null); }
+  if (data.autopilot_priority !== undefined) { updates.push(`autopilot_priority = $${i++}`); values.push(data.autopilot_priority || null); }
 
   if (updates.length > 0) {
     updates.push(`updated_at = now()`);
@@ -361,6 +363,21 @@ app.post("/tasks", zValidator("json", CreateTaskSchema), async (c) => {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()) RETURNING *`,
     [data.column_id, data.title, data.description ?? null, data.position, data.priority ?? null, data.start_date ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null, data.image_url ?? null]
   );
+
+  // Autopilot: if the board auto-assigns new cards to an agent (optionally only a
+  // given priority), queue this card for that agent automatically.
+  const ap = await one<{ autopilot_agent: string | null; autopilot_priority: string | null }>(
+    "SELECT b.autopilot_agent, b.autopilot_priority FROM columns c JOIN boards b ON b.id = c.board_id WHERE c.id = $1",
+    [data.column_id]
+  );
+  if (task && ap?.autopilot_agent && (!ap.autopilot_priority || ap.autopilot_priority === (data.priority ?? null))) {
+    const queued = await one<Task>(
+      "UPDATE tasks SET agent = $1, agent_status = 'queued', updated_at = now() WHERE id = $2 RETURNING *",
+      [ap.autopilot_agent, task.id]
+    );
+    await addComment(task.id, null, `Auto-queued for ${ap.autopilot_agent === "codex" ? "Codex" : "Claude Code"} by autopilot.`, true);
+    return c.json(queued, 201);
+  }
   return c.json(task, 201);
 });
 

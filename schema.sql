@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS boards (
   public_theme  TEXT DEFAULT 'auto',
   invite_mode   TEXT DEFAULT 'none',
   github_repo   TEXT,          -- "owner/repo" for the GitHub bridge
+  autopilot_agent    TEXT,     -- 'claude' | 'codex' | null — auto-queue new cards for this agent
+  autopilot_priority TEXT,     -- '' | 'high' | 'medium' | 'low' — only auto-queue matching cards
   owner_id      TEXT,          -- neon_auth.user.id of the board owner (null = legacy/shared)
   created_at    TIMESTAMPTZ DEFAULT now(),
   updated_at    TIMESTAMPTZ DEFAULT now()

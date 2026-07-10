@@ -12,6 +12,8 @@ export const BoardSchema = z.object({
   public_theme: z.string().default('auto'),
   invite_mode: z.string().default('none'),
   github_repo: z.string().nullable().optional(),
+  autopilot_agent: z.string().nullable().optional(),     // 'claude' | 'codex' | null — auto-queue new cards for this agent
+  autopilot_priority: z.string().nullable().optional(),  // '' | 'high' | 'medium' | 'low' — only auto-queue matching cards
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -32,6 +34,8 @@ export const UpdateBoardSchema = z.object({
   public_theme: z.enum(['auto', 'light', 'dark']).optional(),
   invite_mode: z.enum(['none', 'email']).optional(),
   github_repo: z.string().nullable().optional(),
+  autopilot_agent: z.enum(['claude', 'codex']).nullable().optional(),
+  autopilot_priority: z.enum(['', 'high', 'medium', 'low']).nullable().optional(),
 });
 
 // Column schemas

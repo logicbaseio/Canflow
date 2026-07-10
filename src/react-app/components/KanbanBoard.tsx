@@ -6,11 +6,12 @@ import TaskCard from './TaskCard';
 import TaskModal from './TaskModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import PriorityFilter from '@/react-app/components/ui/PriorityFilter';
+import AutopilotMenu from '@/react-app/components/ui/AutopilotMenu';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import { authedFetch } from '@/react-app/lib/auth';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { useBoardDnd } from '@/react-app/hooks/useBoardDnd';
-import { useBoard, createTask, updateTask, deleteTask, createColumn, updateColumn, deleteColumn } from '@/react-app/hooks/useApi';
+import { useBoard, createTask, updateTask, deleteTask, createColumn, updateColumn, deleteColumn, updateBoard } from '@/react-app/hooks/useApi';
 import type { Task, Column, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
 
 interface KanbanBoardProps {
@@ -58,6 +59,16 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
       refetch();
       if (agent) toast(`Queued for ${agent === 'codex' ? 'Codex' : 'Claude Code'} — run your agent to pick it up`);
     } catch (e) { console.error('Failed to assign agent:', e); toast('Could not assign agent'); }
+  };
+
+  const handleAutopilotChange = async (agent: 'claude' | 'codex' | null, priority: string) => {
+    try {
+      await updateBoard(boardId, { autopilot_agent: agent, autopilot_priority: priority as '' | 'high' | 'medium' | 'low' });
+      await refetch();
+      toast(agent
+        ? `Autopilot on — new ${priority ? priority + '-priority ' : ''}cards auto-queue for ${agent === 'codex' ? 'Codex' : 'Claude Code'}`
+        : 'Autopilot off');
+    } catch (e) { console.error('Failed to set autopilot:', e); toast('Could not update autopilot'); }
   };
 
   const handleTaskSave = async (data: CreateTask | UpdateTask) => {
@@ -113,6 +124,7 @@ export default function KanbanBoard({ boardId, onBoardChanged }: KanbanBoardProp
           {board.description && <p className="truncate text-[12px] text-ink-subtle pl-1.5 -ml-1.5">{board.description}</p>}
         </div>
         <div className="flex items-center gap-2">
+          <AutopilotMenu agent={board.autopilot_agent ?? null} priority={board.autopilot_priority ?? null} onChange={handleAutopilotChange} />
           <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
           <button onClick={handleAddColumn} className="btn btn-outline h-8 px-3">
             <Plus size={15} /> Add column
