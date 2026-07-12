@@ -1,6 +1,6 @@
 # canflow-mcp
 
-An [MCP](https://modelcontextprotocol.io) server that connects **Claude Code**, **Codex**, and other MCP clients to [Canflow](https://canflow.app) — so an AI coding agent can pull bug/issue cards from your beta-testing boards and move them as it works.
+An [MCP](https://modelcontextprotocol.io) server that connects **Claude Code**, **Codex**, and other MCP clients to [Canflow](https://canflow.app) — so an AI coding agent can pick up the cards you assign it, work them, and write status back to the board in real time.
 
 ## Setup
 
@@ -33,22 +33,33 @@ env = { CANFLOW_TOKEN = "cf_your_token" }
 
 | Tool | Description |
 | --- | --- |
-| `list_issues` | List issue cards from your beta boards. Filter by `phase` (column name) or `board_id`. |
-| `get_issue` | Full details of one issue: title, description, severity/intensity, category, screenshot URL, and valid phases to move to. |
-| `move_issue` | Move an issue to another phase (e.g. `Fixing`, `Verified`, `Shipped`) to reflect progress. |
+| `list_queued` | **Your pickup queue.** Lists every card a human queued for an agent (`agent_status: "queued"`) across **all** board types — Task Manager, Roadmap, Beta. Pass your `agent` identity to see only yours. Call this first. |
+| `list_issues` | List bug/issue cards from beta boards. Filter by `phase` (column name) or `board_id`. |
+| `get_issue` | Full details of one card: title, description, severity/intensity, category, screenshot URL, valid phases, agent attribution, and the comments/activity timeline. Read before working a card. |
+| `update_issue_agent` | Set the agent badge + status without moving the card. `agent_status`: `working \| done \| fixed \| verified \| blocked \| needs-review`. |
+| `move_issue` | Move a card to another phase (e.g. `Fixing`, `Verified`, `Shipped`) to reflect progress. Can also stamp agent/status/note. |
+| `comment_issue` | Append a markdown comment to the card's activity timeline (append-only). |
+
+## The agent workflow
+
+Once a card is assigned to you (a human clicks **Assign to agent**, or a board's **Autopilot** auto-assigns new cards), it lands in your queue:
+
+1. `list_queued({ agent: "claude" })` — find work assigned to you.
+2. `get_issue({ id })` — read full context before starting.
+3. `update_issue_agent({ id, agent: "claude", agent_status: "working", agent_note: "…" })` — claim it; the card shows a live "Working" badge.
+4. Do the work in the repo (the card includes `github_repo` when set).
+5. `comment_issue({ id, body: "root cause, files changed, verification…" })` — record details.
+6. `update_issue_agent({ id, agent_status: "done", agent_note: "Fixed + tests" })` and/or `move_issue({ id, phase: "Done" })`.
 
 ## Example prompt
 
-> Pull the bugs from my Canflow "Issues Identified" phase, fix them one by one, and move each card to Fixing then Verified.
+> Check my Canflow queue with list_queued, then work each card end to end: mark it working, fix it in the repo, open a PR, comment the summary, and mark it done.
+
+## Changelog
+
+- **1.5.0** — Added `list_queued` (cross-board pickup queue for cards a human assigned to an agent). `update_issue_agent` now accepts `done` and `verified`. Docs cover the full assign → work → done loop.
+- **1.4.0** — `move_issue`, `update_issue_agent`, `comment_issue`, and the activity timeline.
 
 ## License
 
 MIT
-
-## Tools
-
-- **list_issues** `{ phase?, board_id? }` — list issue cards (optionally by phase).
-- **get_issue** `{ id }` — full card details incl. `available_phases`, agent attribution, and the **comments/activity timeline**.
-- **move_issue** `{ id, phase, agent?, status?, note? }` — move a card between phases; auto-logs a system comment and (if `note`) an agent comment.
-- **update_issue_agent** `{ id, agent?, agent_status?, agent_note? }` — set the agent badge (name + status pill) without moving the card. `agent_status`: `working | fixed | blocked | needs-review`.
-- **comment_issue** `{ id, author?, body }` — append a markdown comment to the card's activity timeline (append-only).
