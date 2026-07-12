@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ImagePlus, Loader2, Trash2, Send } from 'lucide-react';
+import { X, ImagePlus, Loader2, Trash2, Send, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import Select from '@/react-app/components/ui/Select';
 import DatePicker from '@/react-app/components/ui/DatePicker';
@@ -308,16 +308,30 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
             {imgError && <p className="mt-1.5 text-[12px] text-danger">{imgError}</p>}
           </div>
 
+          {task && task.agent && (
+            <div className="border-t border-line pt-4">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Agent run</span>
+                <AgentStatusBadge agent={task.agent} status={task.agent_status} />
+              </div>
+              {task.agent_note && (
+                <p className="mb-2 rounded-md bg-surface-2 px-2.5 py-2 text-[12.5px] leading-relaxed text-ink-muted whitespace-pre-wrap">{task.agent_note}</p>
+              )}
+              {task.github_url && (
+                <a href={task.github_url} target="_blank" rel="noreferrer"
+                   className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink hover:bg-surface-2 transition-colors">
+                  <ExternalLink size={13} />
+                  {task.github_issue_number ? `View #${task.github_issue_number} on GitHub` : 'View the pull request'}
+                </a>
+              )}
+            </div>
+          )}
+
           {task && (
             <div className="border-t border-line pt-4">
               <div className="mb-2.5 flex items-center justify-between gap-2">
                 <span className="text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Activity</span>
-                {task.agent && <AgentStatusBadge agent={task.agent} status={task.agent_status} />}
               </div>
-
-              {task.agent_note && (
-                <p className="mb-3 rounded-md bg-surface-2 px-2.5 py-2 text-[12.5px] leading-relaxed text-ink-muted whitespace-pre-wrap">{task.agent_note}</p>
-              )}
 
               {loadingComments ? (
                 <div className="flex items-center gap-2 text-[12px] text-ink-subtle"><Loader2 size={14} className="animate-spin" /> Loading activity…</div>

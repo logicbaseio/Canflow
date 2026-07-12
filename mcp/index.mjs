@@ -33,14 +33,31 @@ async function api(path, opts = {}) {
 
 const ok = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj, null, 2) }] });
 
-const server = new McpServer({ name: "canflow", version: "1.0.0" });
+const server = new McpServer({ name: "canflow", version: "1.5.0" });
+
+server.registerTool(
+  "list_queued",
+  {
+    title: "List queued work",
+    description:
+      "Your pickup queue. Lists every card a human has queued for a coding agent (agent_status \"queued\") across ALL board types — Task Manager, Roadmap, and Beta. Call this FIRST to find what to work next. Each card includes id, title, description, board_title, phase, board_type, the agent it's queued for, and the board's github_repo if set. " +
+      "Per card, the workflow is: update_issue_agent(id, status:\"working\") to claim it → do the work → update_issue_agent(id, status:\"done\", agent_note: one-line summary), plus comment_issue for details and move_issue if the board has phases. Pass your agent identity to see only cards queued for you.",
+    inputSchema: { agent: z.string().optional() },
+  },
+  async ({ agent }) => {
+    const rows = await api(`/issues?queued=1`);
+    const list = Array.isArray(rows) ? rows : [];
+    const filtered = agent ? list.filter((r) => (r.agent || "").toLowerCase().includes(agent.toLowerCase())) : list;
+    return ok(filtered);
+  }
+);
 
 server.registerTool(
   "list_issues",
   {
     title: "List issues",
     description:
-      "List bug/issue cards from your Canflow beta-testing boards. Optionally filter by phase (column name, e.g. \"Issues Identified\") or board_id. Use this to pull the queue of issues to work on.",
+      "List bug/issue cards from your Canflow beta-testing boards. Optionally filter by phase (column name, e.g. \"Issues Identified\") or board_id. To find work a human explicitly assigned to you on any board, prefer list_queued.",
     inputSchema: { phase: z.string().optional(), board_id: z.number().optional() },
   },
   async ({ phase, board_id }) => {
@@ -91,11 +108,11 @@ server.registerTool(
   {
     title: "Update issue agent attribution",
     description:
-      "Set the coding-agent attribution + status badge on a card WITHOUT moving it. Shows on the board as e.g. \"Working — Claude Code\". Use agent for your identity (e.g. \"claude-code\", \"codex\"), agent_status for the state, and agent_note for a one-line summary of the current state / fix.",
+      "Set the coding-agent attribution + status badge on a card WITHOUT moving it. Shows on the board as e.g. \"Working — Claude Code\". Use agent for your identity (e.g. \"claude-code\", \"codex\"), agent_status for the state, and agent_note for a one-line summary of the current state / fix. Claim a queued card with status \"working\", and mark it \"done\" when finished.",
     inputSchema: {
       id: z.number(),
       agent: z.string().optional(),
-      agent_status: z.enum(["working", "fixed", "blocked", "needs-review"]).optional(),
+      agent_status: z.enum(["working", "done", "fixed", "verified", "blocked", "needs-review"]).optional(),
       agent_note: z.string().optional(),
     },
   },

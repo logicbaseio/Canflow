@@ -13,10 +13,12 @@ const CONDITIONS: { value: string; label: string }[] = [
  * Board-level autopilot: auto-assign every new card (optionally of a given
  * priority) to a coding agent, so work queues itself the moment it's created.
  */
-export default function AutopilotMenu({ agent, priority, onChange }: {
+export default function AutopilotMenu({ agent, priority, onChange, showCondition = true, label = 'new cards' }: {
   agent: string | null;
   priority: string | null;
   onChange: (agent: 'claude' | 'codex' | null, priority: string) => void;
+  showCondition?: boolean;
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const on = agent === 'claude' || agent === 'codex';
@@ -34,10 +36,10 @@ export default function AutopilotMenu({ agent, priority, onChange }: {
           <div className="menu absolute right-0 top-10 z-20 w-64 py-2">
             <div className="px-3 pb-2">
               <div className="text-[13px] font-semibold text-ink flex items-center gap-1.5"><Zap size={13} /> Autopilot</div>
-              <p className="mt-0.5 text-[11.5px] text-ink-muted leading-snug">Auto-assign new cards to an agent so they queue for pickup the moment they're created.</p>
+              <p className="mt-0.5 text-[11.5px] text-ink-muted leading-snug">Auto-assign {label} to an agent so they queue for pickup the moment they're created.</p>
             </div>
             <div className="my-1 h-px bg-line" />
-            <div className="px-3 pt-1 pb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-subtle">Assign new cards to</div>
+            <div className="px-3 pt-1 pb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-subtle">Assign {label} to</div>
             <button className="menu-item justify-between" onClick={() => onChange(null, priority || '')}>
               <span>Off</span>{!on && <Check size={14} />}
             </button>
@@ -48,7 +50,7 @@ export default function AutopilotMenu({ agent, priority, onChange }: {
               <span className="inline-flex items-center gap-2"><CodexLogo className="h-3.5 w-3.5" /> Codex</span>{agent === 'codex' && <Check size={14} />}
             </button>
 
-            {on && (
+            {on && showCondition && (
               <>
                 <div className="my-1 h-px bg-line" />
                 <div className="px-3 pt-1 pb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-subtle">Condition</div>

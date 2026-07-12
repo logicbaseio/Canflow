@@ -814,21 +814,28 @@ app.delete("/tokens/:id", async (c) => {
 
 /* ----------------------------- Issues API (agent-facing) ----------------------------- */
 
-// List bug/issue cards from the user's beta-testing boards. Optional ?phase= and ?board_id=.
+// List cards for agents. Default: bug/issue cards from beta-testing boards.
+// ?queued=1 returns every card a human queued for an agent across ALL board
+// types (Task Manager, Roadmap, Beta) — the agent's pickup queue. Optional
+// ?phase= and ?board_id=.
 app.get("/issues", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const phase = c.req.query("phase");
   const boardId = c.req.query("board_id");
+  const queued = c.req.query("queued");
   const params: unknown[] = [uid];
   let sqlText = `
     SELECT t.id, t.title, t.description, t.priority, t.intensity, t.category, t.image_url,
            t.agent, t.agent_status, t.agent_note,
-           b.id AS board_id, b.title AS board_title, col.id AS column_id, col.title AS phase
+           b.id AS board_id, b.title AS board_title, b.board_type, b.github_repo,
+           col.id AS column_id, col.title AS phase
     FROM tasks t
     JOIN columns col ON col.id = t.column_id
     JOIN boards b ON b.id = col.board_id
-    WHERE b.owner_id = $1 AND b.board_type = 'beta-testing'`;
+    WHERE b.owner_id = $1`;
+  if (queued) sqlText += ` AND t.agent_status = 'queued'`;
+  else sqlText += ` AND b.board_type = 'beta-testing'`;
   if (boardId) { params.push(parseInt(boardId)); sqlText += ` AND b.id = $${params.length}`; }
   if (phase) { params.push(phase); sqlText += ` AND lower(col.title) = lower($${params.length})`; }
   sqlText += ` ORDER BY b.id, col.position, t.position`;

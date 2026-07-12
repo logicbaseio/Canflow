@@ -7,11 +7,12 @@ import TaskModal from './TaskModal';
 import FixWithModal from './FixWithModal';
 import Select from '@/react-app/components/ui/Select';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
+import AutopilotMenu from '@/react-app/components/ui/AutopilotMenu';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authedFetch } from '@/react-app/lib/auth';
 import { useBoardDnd } from '@/react-app/hooks/useBoardDnd';
-import { useBoard, createTask, updateTask, deleteTask, createColumn, deleteColumn, useBetaCategories } from '@/react-app/hooks/useApi';
+import { useBoard, createTask, updateTask, deleteTask, createColumn, deleteColumn, updateBoard, useBetaCategories } from '@/react-app/hooks/useApi';
 import type { Task, CreateTask, UpdateTask, CreateColumn } from '@/shared/types';
 
 interface BetaTestingBoardProps {
@@ -189,6 +190,19 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
           <p className="truncate text-[12px] text-ink-subtle pl-1.5 -ml-1.5">Beta testing space</p>
         </div>
         <div className="flex items-center gap-2">
+          <AutopilotMenu
+            agent={board.autopilot_agent ?? null}
+            priority={board.autopilot_priority ?? null}
+            showCondition={false}
+            label="new bug reports"
+            onChange={async (agent) => {
+              try {
+                await updateBoard(board.id, { autopilot_agent: agent, autopilot_priority: '' });
+                await refetch();
+                toast(agent ? `Autopilot on — new bug reports auto-queue for ${agent === 'codex' ? 'Codex' : 'Claude Code'}` : 'Autopilot off');
+              } catch (e) { console.error('autopilot', e); toast('Could not update autopilot'); }
+            }}
+          />
           <button onClick={() => setShowCategoriesModal(true)} className="btn btn-outline h-8 px-3">
             <Settings size={15} /> Categories
           </button>
