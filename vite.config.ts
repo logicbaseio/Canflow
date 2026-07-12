@@ -7,6 +7,18 @@ export default defineConfig({
   build: {
     outDir: "dist",
     chunkSizeWarningLimit: 5000,
+    rollupOptions: {
+      output: {
+        // Split heavy, rarely-changing vendor libs into their own cacheable
+        // chunks that download in parallel with the app code.
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router"],
+          dnd: ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
+          sentry: ["@sentry/react"],
+          utils: ["date-fns", "lucide-react"],
+        },
+      },
+    },
   },
   resolve: {
     alias: {

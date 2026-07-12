@@ -26,12 +26,27 @@ import { query, one } from "./db";
 
 const app = new Hono().basePath("/api");
 
-app.use("*", cors());
+app.use("*", cors({
+  // Bearer-token auth (no cookies), but restrict browser origins to our own
+  // domains + localhost anyway. Non-browser callers (MCP) send no Origin.
+  origin: (origin) => {
+    if (!origin) return origin;
+    if (/^https:\/\/([a-z0-9-]+\.)?canflow\.app$/.test(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin)) return origin;
+    return "";
+  },
+}));
 
 /* ----------------------------- Rate limiting (Neon-backed, IP fixed-window) ----------------------------- */
 
-const clientIp = (c: Context): string =>
-  (c.req.header("x-forwarded-for")?.split(",")[0] ?? c.req.header("x-real-ip") ?? "unknown").trim();
+// On Vercel the client-controlled leftmost x-forwarded-for is spoofable; trust
+// x-real-ip (set by the platform) and fall back to the rightmost XFF hop.
+const clientIp = (c: Context): string => {
+  const real = c.req.header("x-real-ip");
+  if (real?.trim()) return real.trim();
+  const xff = c.req.header("x-forwarded-for");
+  if (xff) { const parts = xff.split(","); return parts[parts.length - 1].trim(); }
+  return "unknown";
+};
 
 /**
  * Fixed-window per-IP limiter backed by Postgres so it holds across edge
@@ -88,6 +103,24 @@ const jwks = createRemoteJWKSet(new URL(JWKS_URL));
 async function sha256hex(input: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const escapeHtml = (s: string): string => s.replace(/[<>&"']/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[ch]!));
+
+const timingSafeEqual = (a: string, b: string): boolean => {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+};
+
+// Verify a GitHub webhook's X-Hub-Signature-256 (HMAC-SHA256 of the raw body).
+async function verifyGithubSignature(secret: string, rawBody: string, header: string): Promise<boolean> {
+  if (!header.startsWith("sha256=")) return false;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+  const expected = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return timingSafeEqual(expected, header.slice(7));
 }
 
 /**
@@ -172,10 +205,20 @@ async function meterAgentAction(uid: string): Promise<{ ok: boolean; count: numb
   const s = await ensureSettings(uid);
   if (effectivePlan(s) === "pro") return { ok: true, count: s.agent_count ?? 0, limit: FREE.agentActions };
   const month = currentMonth();
-  const count = s.agent_month === month ? (s.agent_count ?? 0) : 0;
-  if (count >= FREE.agentActions) return { ok: false, count, limit: FREE.agentActions };
-  await query("UPDATE user_settings SET agent_month = $1, agent_count = $2, updated_at = now() WHERE user_id = $3", [month, count + 1, uid]);
-  return { ok: true, count: count + 1, limit: FREE.agentActions };
+  // Atomic increment: rolls the counter over on a new month and only increments
+  // while under the cap. Concurrent calls serialize on the row, so the monthly
+  // limit can't be raced past.
+  const updated = await one<{ agent_count: number }>(
+    `UPDATE user_settings
+     SET agent_month = $1,
+         agent_count = CASE WHEN agent_month = $1 THEN COALESCE(agent_count, 0) + 1 ELSE 1 END,
+         updated_at = now()
+     WHERE user_id = $2 AND (agent_month IS DISTINCT FROM $1 OR COALESCE(agent_count, 0) < $3)
+     RETURNING agent_count`,
+    [month, uid, FREE.agentActions]
+  );
+  if (!updated) return { ok: false, count: FREE.agentActions, limit: FREE.agentActions };
+  return { ok: true, count: updated.agent_count, limit: FREE.agentActions };
 }
 
 const overLimit = (c: import("hono").Context, code: string, message: string) => c.json({ error: message, code, upgrade: true }, 402);
@@ -189,20 +232,24 @@ app.get("/boards", async (c) => {
   return c.json(boards);
 });
 
+// Assemble a board with its columns + tasks in exactly two queries (no N+1).
+async function assembleBoard(board: Board): Promise<BoardWithColumns> {
+  const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [board.id]);
+  const tasks = columns.length
+    ? await query<Task>("SELECT * FROM tasks WHERE column_id = ANY($1::int[]) ORDER BY position, id", [columns.map((col) => col.id)])
+    : [];
+  const byCol = new Map<number, Task[]>(columns.map((col) => [col.id, []]));
+  for (const t of tasks) byCol.get(t.column_id)?.push(t);
+  return { ...board, columns: columns.map((col) => ({ ...col, tasks: byCol.get(col.id) ?? [] })) };
+}
+
 app.get("/boards/:id", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
   const board = await one<Board>("SELECT * FROM boards WHERE id = $1 AND owner_id = $2", [id, uid]);
   if (!board) return c.json({ error: "Board not found" }, 404);
-
-  const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [id]);
-  const boardWithColumns: BoardWithColumns = { ...board, columns: [] };
-  for (const column of columns) {
-    const tasks = await query<Task>("SELECT * FROM tasks WHERE column_id = $1 ORDER BY position", [column.id]);
-    boardWithColumns.columns.push({ ...column, tasks });
-  }
-  return c.json(boardWithColumns);
+  return c.json(await assembleBoard(board));
 });
 
 app.post("/boards", zValidator("json", CreateBoardSchema), async (c) => {
@@ -358,10 +405,13 @@ app.post("/tasks", zValidator("json", CreateTaskSchema), async (c) => {
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
   if (!(await ownsColumn(data.column_id, uid))) return c.json({ error: "Column not found" }, 404);
+  // Always append to the end of the column; positions are managed server-side so
+  // they stay unique and sequential (the client's position is not trusted).
+  const posRow = await one<{ n: number }>("SELECT COALESCE(MAX(position) + 1, 0) AS n FROM tasks WHERE column_id = $1", [data.column_id]);
   const task = await one<Task>(
     `INSERT INTO tasks (column_id, title, description, position, priority, start_date, due_date, tags, intensity, category, image_url, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()) RETURNING *`,
-    [data.column_id, data.title, data.description ?? null, data.position, data.priority ?? null, data.start_date ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null, data.image_url ?? null]
+    [data.column_id, data.title, data.description ?? null, posRow?.n ?? 0, data.priority ?? null, data.start_date ?? null, data.due_date ?? null, data.tags ?? null, data.intensity ?? 0, data.category ?? null, data.image_url ?? null]
   );
 
   // Autopilot: if the board auto-assigns new cards to an agent (optionally only a
@@ -423,10 +473,22 @@ app.patch("/tasks/:id/move", zValidator("json", MoveTaskSchema), async (c) => {
   const id = parseInt(c.req.param("id"));
   if (!(await ownsTask(id, uid))) return c.json({ error: "Task not found" }, 404);
   const { column_id, position } = c.req.valid("json");
-  const task = await one<Task>(
-    `UPDATE tasks SET column_id = $1, position = $2, updated_at = now() WHERE id = $3 RETURNING *`,
-    [column_id, position, id]
+  // Move to the target column, then renumber that column so the card lands at
+  // `position` and every card has a unique, sequential position (0,1,2,…).
+  await query("UPDATE tasks SET column_id = $1, updated_at = now() WHERE id = $2", [column_id, id]);
+  const siblings = await query<{ id: number }>(
+    "SELECT id FROM tasks WHERE column_id = $1 AND id <> $2 ORDER BY position, updated_at, id",
+    [column_id, id]
   );
+  const order = siblings.map((s) => s.id);
+  order.splice(Math.max(0, Math.min(position, order.length)), 0, id);
+  await query(
+    `UPDATE tasks t SET position = v.pos
+     FROM (SELECT unnest($1::int[]) AS tid, generate_subscripts($1::int[], 1) - 1 AS pos) v
+     WHERE t.id = v.tid`,
+    [order]
+  );
+  const task = await one<Task>("SELECT * FROM tasks WHERE id = $1", [id]);
   return c.json(task);
 });
 
@@ -445,12 +507,7 @@ app.get("/public/:publicKey", async (c) => {
   const publicKey = c.req.param("publicKey");
   const board = await one<Board & { owner_id: string }>("SELECT * FROM boards WHERE public_key = $1 AND is_public = TRUE", [publicKey]);
   if (!board) return c.json({ error: "Board not found or not public" }, 404);
-  const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [board.id]);
-  const boardWithColumns: BoardWithColumns = { ...board, columns: [] };
-  for (const column of columns) {
-    const tasks = await query<Task>("SELECT * FROM tasks WHERE column_id = $1 ORDER BY position", [column.id]);
-    boardWithColumns.columns.push({ ...column, tasks });
-  }
+  const boardWithColumns = await assembleBoard(board);
   // Owner's org branding, so their logo/name shows on the public board.
   const settings = await one<{ org_name: string | null; org_image: string | null }>(
     "SELECT org_name, org_image FROM user_settings WHERE user_id = $1",
@@ -466,7 +523,16 @@ app.post("/public/:publicKey/tasks/:id/vote", zValidator("json", VoteTaskSchema)
   const board = await one<{ id: number }>("SELECT id FROM boards WHERE public_key = $1 AND is_public = TRUE", [publicKey]);
   if (!board) return c.json({ error: "Board not found or not public" }, 404);
   const column = vote_type === "upvote" ? "upvotes" : "downvotes";
-  const task = await one<Task>(`UPDATE tasks SET ${column} = ${column} + 1 WHERE id = $1 RETURNING *`, [taskId]);
+  // Scope the task to THIS board so a public link can't touch other boards'
+  // cards, and return only the vote counts (never the full row).
+  const task = await one<{ id: number; upvotes: number; downvotes: number }>(
+    `UPDATE tasks t SET ${column} = ${column} + 1, updated_at = now()
+     FROM columns c
+     WHERE t.id = $1 AND t.column_id = c.id AND c.board_id = $2
+     RETURNING t.id, t.upvotes, t.downvotes`,
+    [taskId, board.id]
+  );
+  if (!task) return c.json({ error: "Task not found" }, 404);
   return c.json(task);
 });
 
@@ -499,6 +565,9 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
       const column = await one<{ title: string }>("SELECT title FROM columns WHERE id = $1", [data.column_id]);
       columnName = column?.title ?? null;
     }
+    // Escape owner-controlled text before it goes into the email HTML.
+    const boardTitleHtml = escapeHtml(board.title);
+    const columnNameHtml = columnName ? escapeHtml(columnName) : null;
 
     const invitation = await one(
       `INSERT INTO invitations (board_id, column_id, email, invited_by, token, updated_at)
@@ -521,7 +590,7 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
             from,
             to: data.email,
             subject: isBeta ? `You're invited to beta test: ${board.title}` : `You're invited to collaborate on: ${board.title}`,
-            html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">${isBeta ? "Beta Testing Invitation" : "You're invited"}</h1><h2 style="color:#1f2937">${board.title}</h2>${columnName ? `<p style="color:#6b7280">Phase: <strong>${columnName}</strong></p>` : ""}<p style="color:#6b7280">${isBeta ? "Help us improve by reporting bugs and feedback." : `You've been given access to the ${columnName ? `"${columnName}" phase` : "board"}. Add and view items there.`}</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">${isBeta ? "Join Beta Testing" : "Open the board"}</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
+            html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">${isBeta ? "Beta Testing Invitation" : "You're invited"}</h1><h2 style="color:#1f2937">${boardTitleHtml}</h2>${columnNameHtml ? `<p style="color:#6b7280">Phase: <strong>${columnNameHtml}</strong></p>` : ""}<p style="color:#6b7280">${isBeta ? "Help us improve by reporting bugs and feedback." : `You've been given access to the ${columnNameHtml ? `"${columnNameHtml}" phase` : "board"}. Add and view items there.`}</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">${isBeta ? "Join Beta Testing" : "Open the board"}</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
           }),
         });
         const rd = (await response.json()) as { message?: string };
@@ -717,7 +786,7 @@ app.post("/billing/webhook", async (c) => {
 // Secured by a shared secret in the query string (configured in the webhook URL).
 app.post("/auth/email", async (c) => {
   const secret = process.env.AUTH_EMAIL_SECRET || "";
-  if (!secret || c.req.query("key") !== secret) return c.json({ error: "Unauthorized" }, 401);
+  if (!secret || !timingSafeEqual(c.req.query("key") || "", secret)) return c.json({ error: "Unauthorized" }, 401);
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
   if (!RESEND_API_KEY) return c.json({ error: "Email not configured" }, 503);
   const evt = await c.req.json().catch(() => null);
@@ -783,7 +852,7 @@ app.get("/tokens", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const rows = await query(
-    "SELECT id, name, token_prefix, token, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC",
+    "SELECT id, name, token_prefix, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC",
     [uid]
   );
   return c.json(rows);
@@ -798,11 +867,13 @@ app.post("/tokens", async (c) => {
   const token = `cf_${rand}`;
   const hash = await sha256hex(token);
   const prefix = `${token.slice(0, 11)}…`;
-  const row = await one(
-    "INSERT INTO api_tokens (user_id, name, token_hash, token_prefix, token) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, token_prefix, token, created_at",
-    [uid, name, hash, prefix, token]
+  // Store only the hash — never the plaintext. The token is returned once here
+  // and can never be retrieved again.
+  const row = await one<Record<string, unknown>>(
+    "INSERT INTO api_tokens (user_id, name, token_hash, token_prefix) VALUES ($1, $2, $3, $4) RETURNING id, name, token_prefix, created_at",
+    [uid, name, hash, prefix]
   );
-  return c.json(row, 201);
+  return c.json({ ...row, token }, 201);
 });
 
 app.delete("/tokens/:id", async (c) => {
@@ -859,10 +930,18 @@ app.get("/issues/:id", async (c) => {
   );
   if (!row) return c.json({ error: "Issue not found" }, 404);
   const phases = await query<{ title: string }>("SELECT title FROM columns WHERE board_id = $1 ORDER BY position", [row.board_id]);
-  const comments = await query(
-    "SELECT id, author, body, is_system, created_at FROM task_comments WHERE task_id = $1 ORDER BY created_at ASC, id ASC",
-    [id]
-  );
+  // Free plan only sees the recent activity window; Pro sees the full history.
+  const free = effectivePlan(await ensureSettings(uid)) === "free";
+  const comments = free
+    ? await query(
+        `SELECT id, author, body, is_system, created_at FROM task_comments
+         WHERE task_id = $1 AND created_at > now() - ($2 || ' days')::interval ORDER BY created_at ASC, id ASC`,
+        [id, String(FREE.historyDays)]
+      )
+    : await query(
+        "SELECT id, author, body, is_system, created_at FROM task_comments WHERE task_id = $1 ORDER BY created_at ASC, id ASC",
+        [id]
+      );
   return c.json({ ...row, available_phases: phases.map((p) => p.title), comments });
 });
 
@@ -1070,10 +1149,17 @@ app.post("/issues/:id/github", async (c) => {
 
 // GitHub webhook → sync card status from PR lifecycle. Register at repo Settings → Webhooks.
 app.post("/github/webhook", async (c) => {
+  const raw = await c.req.text();
+  // Require a configured secret and a valid signature — otherwise ignore the
+  // event (fail closed) so forged payloads can't move anyone's cards.
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) return c.json({ ok: true, skipped: "webhook secret not configured" });
+  if (!(await verifyGithubSignature(secret, raw, c.req.header("X-Hub-Signature-256") || ""))) {
+    return c.json({ error: "Invalid signature" }, 401);
+  }
   const event = c.req.header("X-GitHub-Event");
-  const payload = (await c.req.json().catch(() => null)) as
-    | { action?: string; pull_request?: { title?: string; body?: string; merged?: boolean }; repository?: { full_name?: string } }
-    | null;
+  let payload: { action?: string; pull_request?: { title?: string; body?: string; merged?: boolean }; repository?: { full_name?: string } } | null = null;
+  try { payload = JSON.parse(raw); } catch { payload = null; }
   if (!payload || event !== "pull_request") return c.json({ ok: true });
 
   const pr = payload.pull_request;
@@ -1111,12 +1197,7 @@ app.get("/invited/:token", async (c) => {
   if (!invitation) return c.json({ error: "Invalid or expired invitation" }, 404);
   const board = await one<Board>("SELECT * FROM boards WHERE id = $1", [invitation.board_id]);
   if (!board) return c.json({ error: "Board not found" }, 404);
-  const columns = await query<Column>("SELECT * FROM columns WHERE board_id = $1 ORDER BY position", [invitation.board_id]);
-  const boardWithColumns: BoardWithColumns = { ...board, columns: [] };
-  for (const column of columns) {
-    const tasks = await query<Task>("SELECT * FROM tasks WHERE column_id = $1 ORDER BY position", [column.id]);
-    boardWithColumns.columns.push({ ...column, tasks });
-  }
+  const boardWithColumns = await assembleBoard(board);
   return c.json({ board: boardWithColumns, invitation, allowedColumnId: invitation.column_id });
 });
 
