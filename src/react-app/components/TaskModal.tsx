@@ -16,6 +16,17 @@ interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: CreateTask | UpdateTask) => void;
+  /** Base URL for the activity/comments API (default: owner-authed /api/issues).
+   *  The invited page points this at its token-scoped endpoints. */
+  commentsBase?: string;
+  /** Fetch used for comments (default: authedFetch; invited pages use plain fetch). */
+  commentsFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  /** Comment author name override (invited pages pass the tester's email). */
+  authorName?: string;
+  /** View-only: fields are not editable, no save, no commenting. */
+  readOnly?: boolean;
+  /** Hide the agent-run section (invited members never see agent workflow). */
+  hideAgent?: boolean;
 }
 
 const EMPTY = {
@@ -57,13 +68,17 @@ async function fileToDataURL(file: File, maxDim = 1280, quality = 0.72): Promise
   return canvas.toDataURL('image/jpeg', quality);
 }
 
-export default function TaskModal({ task, columnId, boardType = 'kanban', categories = [], isOpen, onClose, onSave }: TaskModalProps) {
+export default function TaskModal({
+  task, columnId, boardType = 'kanban', categories = [], isOpen, onClose, onSave,
+  commentsBase = '/api/issues', commentsFetch, authorName, readOnly = false, hideAgent = false,
+}: TaskModalProps) {
   const [formData, setFormData] = useState(EMPTY);
   const [imgLoading, setImgLoading] = useState(false);
   const [imgError, setImgError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
-  const userName = session?.user?.name || session?.user?.email || 'You';
+  const userName = authorName || session?.user?.name || session?.user?.email || 'You';
+  const doFetch = commentsFetch ?? authedFetch;
 
   const [comments, setComments] = useState<IssueComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -73,19 +88,20 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
   useEffect(() => {
     if (!isOpen || !task?.id) { setComments([]); return; }
     setLoadingComments(true);
-    authedFetch(`/api/issues/${task.id}/comments`)
+    doFetch(`${commentsBase}/${task.id}/comments`)
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => setComments(Array.isArray(d) ? d : []))
       .catch(() => setComments([]))
       .finally(() => setLoadingComments(false));
     setNewComment('');
-  }, [isOpen, task?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, task?.id, commentsBase]);
 
   const postComment = async () => {
     if (!task?.id || !newComment.trim()) return;
     setPosting(true);
     try {
-      const res = await authedFetch(`/api/issues/${task.id}/comments`, {
+      const res = await doFetch(`${commentsBase}/${task.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ author: userName, body: newComment.trim() }),
@@ -147,6 +163,7 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) { onClose(); return; }
     const shared = {
       title: formData.title,
       description: formData.description || undefined,
@@ -176,11 +193,14 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
     >
       <div className="card w-full max-w-md shadow-pop flex flex-col max-h-[90vh]" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-line shrink-0">
-          <h2 className="text-[14px] font-semibold text-ink">{task ? `Edit ${taskLabel.toLowerCase()}` : `New ${taskLabel.toLowerCase()}`}</h2>
+          <h2 className="text-[14px] font-semibold text-ink">
+            {readOnly ? taskLabel : task ? `Edit ${taskLabel.toLowerCase()}` : `New ${taskLabel.toLowerCase()}`}
+          </h2>
           <button onClick={onClose} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle"><X size={16} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
+          <div className={`space-y-4 ${readOnly ? 'pointer-events-none' : ''}`}>
           <Field label={`${taskLabel} title`}>
             <input
               type="text"
@@ -275,24 +295,28 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
             {formData.image_url ? (
               <div className="relative group rounded-lg overflow-hidden border border-line">
                 <img src={formData.image_url} alt="attachment" className="w-full max-h-52 object-contain bg-surface-2" />
-                <div className="absolute top-2 right-2 flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="btn btn-outline h-7 px-2 text-[12px] shadow-subtle"
-                  >
-                    Replace
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData((f) => ({ ...f, image_url: '' }))}
-                    className="h-7 w-7 rounded-md flex items-center justify-center bg-surface border border-line text-danger hover:bg-surface-2 shadow-subtle"
-                    title="Remove image"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                {!readOnly && (
+                  <div className="absolute top-2 right-2 flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="btn btn-outline h-7 px-2 text-[12px] shadow-subtle"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData((f) => ({ ...f, image_url: '' }))}
+                      className="h-7 w-7 rounded-md flex items-center justify-center bg-surface border border-line text-danger hover:bg-surface-2 shadow-subtle"
+                      title="Remove image"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
+            ) : readOnly ? (
+              <p className="text-[12px] text-ink-subtle">No attachment.</p>
             ) : (
               <button
                 type="button"
@@ -307,8 +331,9 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
             )}
             {imgError && <p className="mt-1.5 text-[12px] text-danger">{imgError}</p>}
           </div>
+          </div>
 
-          {task && task.agent && (
+          {task && task.agent && !hideAgent && (
             <div className="border-t border-line pt-4">
               <div className="mb-2.5 flex items-center justify-between gap-2">
                 <span className="text-[11px] font-medium uppercase tracking-wider text-ink-subtle">Agent run</span>
@@ -343,32 +368,40 @@ export default function TaskModal({ task, columnId, boardType = 'kanban', catego
                 <p className="text-[12px] text-ink-subtle">No activity yet.</p>
               )}
 
-              <div className="mt-3 flex items-end gap-2">
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); postComment(); } }}
-                  rows={2}
-                  className="field resize-none text-[12.5px]"
-                  placeholder="Add a comment…"
-                />
-                <button
-                  type="button"
-                  onClick={postComment}
-                  disabled={!newComment.trim() || posting}
-                  className="btn btn-outline h-9 w-9 p-0 shrink-0"
-                  title="Comment (⌘↵)"
-                >
-                  {posting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="mt-3 flex items-end gap-2">
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); postComment(); } }}
+                    rows={2}
+                    className="field resize-none text-[12.5px]"
+                    placeholder="Add a comment…"
+                  />
+                  <button
+                    type="button"
+                    onClick={postComment}
+                    disabled={!newComment.trim() || posting}
+                    className="btn btn-outline h-9 w-9 p-0 shrink-0"
+                    title="Comment (⌘↵)"
+                  >
+                    {posting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="btn btn-outline flex-1 h-9">Cancel</button>
-            <button type="submit" className="btn btn-primary flex-1 h-9">{task ? 'Save changes' : `Create ${taskLabel.toLowerCase()}`}</button>
-          </div>
+          {readOnly ? (
+            <div className="flex pt-1">
+              <button type="button" onClick={onClose} className="btn btn-outline flex-1 h-9">Close</button>
+            </div>
+          ) : (
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={onClose} className="btn btn-outline flex-1 h-9">Cancel</button>
+              <button type="submit" className="btn btn-primary flex-1 h-9">{task ? 'Save changes' : `Create ${taskLabel.toLowerCase()}`}</button>
+            </div>
+          )}
         </form>
       </div>
     </div>

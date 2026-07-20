@@ -609,9 +609,13 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
     if (!board) return c.json({ error: "Board not found" }, 404);
     const isBeta = board.board_type === "beta-testing";
 
+    const access = data.access ?? "editor";
     const requested = data.column_ids?.length ? data.column_ids : data.column_id ? [data.column_id] : [];
     const columnIds = await validBoardColumns(data.board_id, requested);
-    if (!columnIds.length) return c.json({ error: "Select at least one phase to give access to" }, 400);
+    // Viewers don't add items anywhere, so a phase selection is optional for them.
+    if (!columnIds.length && access !== "viewer") {
+      return c.json({ error: "Select at least one phase to give access to" }, 400);
+    }
 
     // Re-inviting an email that already has an invite on this board reuses the
     // existing row (same token/link) instead of consuming another tester slot.
@@ -635,14 +639,14 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
       // Re-invite widens access: union of already-granted and newly-selected phases.
       const merged = [...new Set([...grantedColumns(existing), ...columnIds])];
       invitation = await one(
-        `UPDATE invitations SET column_ids = $1, column_id = $2, updated_at = now() WHERE id = $3 RETURNING *`,
-        [merged, merged[0], existing.id]
+        `UPDATE invitations SET column_ids = $1, column_id = $2, access = $3, updated_at = now() WHERE id = $4 RETURNING *`,
+        [merged, merged[0] ?? null, access, existing.id]
       );
     } else {
       invitation = await one(
-        `INSERT INTO invitations (board_id, column_ids, column_id, email, invited_by, token, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, now()) RETURNING *`,
-        [data.board_id, columnIds, columnIds[0], data.email, data.invited_by ?? null, crypto.randomUUID()]
+        `INSERT INTO invitations (board_id, column_ids, column_id, access, email, invited_by, token, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now()) RETURNING *`,
+        [data.board_id, columnIds, columnIds[0] ?? null, access, data.email, data.invited_by ?? null, crypto.randomUUID()]
       );
     }
 
@@ -717,17 +721,33 @@ app.patch("/invitations/:id", zValidator("json", UpdateInvitationSchema), async 
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
-  const inv = await one<{ id: number; board_id: number }>(
-    `SELECT i.id, i.board_id FROM invitations i JOIN boards b ON b.id = i.board_id
+  const inv = await one<{ id: number; board_id: number; access: string | null }>(
+    `SELECT i.id, i.board_id, i.access FROM invitations i JOIN boards b ON b.id = i.board_id
      WHERE i.id = $1 AND b.owner_id = $2`,
     [id, uid]
   );
   if (!inv) return c.json({ error: "Invitation not found" }, 404);
-  const columnIds = await validBoardColumns(inv.board_id, c.req.valid("json").column_ids);
-  if (!columnIds.length) return c.json({ error: "An invite needs at least one phase - revoke it instead to remove all access" }, 400);
+  const patch = c.req.valid("json");
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+  if (patch.column_ids) {
+    const columnIds = await validBoardColumns(inv.board_id, patch.column_ids);
+    if (!columnIds.length && (patch.access ?? inv.access ?? "editor") !== "viewer") {
+      return c.json({ error: "An invite needs at least one phase - revoke it instead to remove all access" }, 400);
+    }
+    sets.push(`column_ids = $${i++}`, `column_id = $${i++}`);
+    vals.push(columnIds, columnIds[0] ?? null);
+  }
+  if (patch.access) {
+    sets.push(`access = $${i++}`);
+    vals.push(patch.access);
+  }
+  if (!sets.length) return c.json({ error: "Nothing to update" }, 400);
+  vals.push(id);
   const updated = await one(
-    `UPDATE invitations SET column_ids = $1, column_id = $2, updated_at = now() WHERE id = $3 RETURNING *`,
-    [columnIds, columnIds[0], id]
+    `UPDATE invitations SET ${sets.join(", ")}, updated_at = now() WHERE id = $${i} RETURNING *`,
+    vals
   );
   return c.json({ success: true, invitation: updated });
 });
@@ -1306,7 +1326,7 @@ app.post("/github/webhook", async (c) => {
 
 app.get("/invited/:token", async (c) => {
   const token = c.req.param("token");
-  const invitation = await one<{ board_id: number; column_id: number | null; column_ids: number[] | null; status: string }>(
+  const invitation = await one<{ board_id: number; column_id: number | null; column_ids: number[] | null; access: string | null; status: string }>(
     "SELECT * FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
     [token]
   );
@@ -1318,26 +1338,62 @@ app.get("/invited/:token", async (c) => {
   const board = await one<Board>("SELECT * FROM boards WHERE id = $1", [invitation.board_id]);
   if (!board) return c.json({ error: "Board not found" }, 404);
   const boardWithColumns = await assembleBoard(board);
+  // Agent-run internals (Fix-with buttons state, agent notes, GitHub links)
+  // are the owner's workflow — never exposed to invited members.
+  const scrubbed = {
+    ...boardWithColumns,
+    columns: boardWithColumns.columns.map((col) => ({
+      ...col,
+      tasks: col.tasks.map((t) => {
+        const { agent: _a, agent_status: _s, agent_note: _n, github_url: _g, github_issue_number: _i, ...rest } = t;
+        return rest;
+      }),
+    })),
+  };
   const allowed = grantedColumns(invitation);
   return c.json({
-    board: boardWithColumns,
+    board: scrubbed,
     invitation,
+    access: invitation.access === "viewer" ? "viewer" : "editor",
     allowedColumnId: allowed[0] ?? null, // legacy single-phase field
     allowedColumnIds: allowed,
   });
 });
+
+// Shared guard for invited writes: resolves the invite, requires editor access.
+async function invitedEditor(token: string): Promise<{ board_id: number; allowed: number[] } | null> {
+  const inv = await one<{ board_id: number; column_id: number | null; column_ids: number[] | null; access: string | null }>(
+    "SELECT board_id, column_id, column_ids, access FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
+    [token]
+  );
+  if (!inv || inv.access === "viewer") return null;
+  return { board_id: inv.board_id, allowed: grantedColumns(inv) };
+}
+
+// A task on the invite's board, with its column (for grant checks).
+async function invitedTask(boardId: number, taskId: number): Promise<{ id: number; column_id: number } | null> {
+  return one<{ id: number; column_id: number }>(
+    `SELECT t.id, t.column_id FROM tasks t JOIN columns c ON c.id = t.column_id
+     WHERE t.id = $1 AND c.board_id = $2`,
+    [taskId, boardId]
+  );
+}
+
+// Comments an invited member may see: human activity only — no system notes,
+// no agent (Claude Code / Codex) write-ups.
+const INVITED_COMMENTS_SQL = `
+  SELECT id, author, body, is_system, created_at FROM task_comments
+  WHERE task_id = $1 AND is_system = false
+    AND (author IS NULL OR author !~* '(claude|codex|openai|gpt)')
+  ORDER BY created_at ASC, id ASC`;
 
 // Invited members add items ONLY to columns they were granted. The grant set
 // comes from the invite token, never the client, so access can't be widened —
 // the client may pick WHICH granted column, but nothing outside the set.
 app.post("/invited/:token/tasks", async (c) => {
   if (!(await rateLimit(c, "invited-task", 30, 60))) return c.json({ error: "Too many requests. Please wait a minute." }, 429);
-  const token = c.req.param("token");
-  const invitation = await one<{ column_id: number | null; column_ids: number[] | null }>(
-    "SELECT column_id, column_ids FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
-    [token]
-  );
-  const allowed = invitation ? grantedColumns(invitation) : [];
+  const inv = await invitedEditor(c.req.param("token"));
+  const allowed = inv?.allowed ?? [];
   if (!allowed.length) return c.json({ error: "Invalid or expired invitation" }, 404);
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -1347,8 +1403,8 @@ app.post("/invited/:token/tasks", async (c) => {
   const colId = requestedCol;
   const posRow = await one<{ n: number }>("SELECT COALESCE(MAX(position) + 1, 0) AS n FROM tasks WHERE column_id = $1", [colId]);
   const task = await one<Task>(
-    `INSERT INTO tasks (column_id, title, description, position, priority, start_date, due_date, category, intensity, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) RETURNING *`,
+    `INSERT INTO tasks (column_id, title, description, position, priority, start_date, due_date, category, intensity, image_url, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now()) RETURNING *`,
     [
       colId,
       title,
@@ -1359,9 +1415,86 @@ app.post("/invited/:token/tasks", async (c) => {
       typeof body.due_date === "string" ? body.due_date : null,
       typeof body.category === "string" ? body.category : null,
       typeof body.intensity === "number" ? body.intensity : 0,
+      typeof body.image_url === "string" && body.image_url ? body.image_url : null,
     ]
   );
   return c.json(task, 201);
+});
+
+// Bug categories for the invited report form (token-scoped, read-only).
+app.get("/invited/:token/categories", async (c) => {
+  const inv = await one<{ board_id: number }>(
+    "SELECT board_id FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
+    [c.req.param("token")]
+  );
+  if (!inv) return c.json({ error: "Invalid or expired invitation" }, 404);
+  const categories = await query("SELECT * FROM beta_categories WHERE board_id = $1 ORDER BY name", [inv.board_id]);
+  return c.json(categories);
+});
+
+// Editors can edit any card field in their granted phases — but never move the
+// card or touch the owner's agent workflow.
+app.patch("/invited/:token/tasks/:id", async (c) => {
+  if (!(await rateLimit(c, "invited-task", 30, 60))) return c.json({ error: "Too many requests. Please wait a minute." }, 429);
+  const inv = await invitedEditor(c.req.param("token"));
+  if (!inv) return c.json({ error: "Invalid or expired invitation" }, 404);
+  const task = await invitedTask(inv.board_id, parseInt(c.req.param("id")));
+  if (!task) return c.json({ error: "Card not found" }, 404);
+  if (!inv.allowed.includes(task.column_id)) return c.json({ error: "You don't have access to that phase" }, 403);
+
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+  const text = (field: string) => {
+    if (typeof body[field] === "string") { sets.push(`${field} = $${i++}`); vals.push((body[field] as string) || null); }
+  };
+  if (typeof body.title === "string" && (body.title as string).trim()) { sets.push(`title = $${i++}`); vals.push((body.title as string).trim()); }
+  text("description");
+  text("priority");
+  text("start_date");
+  text("due_date");
+  text("tags");
+  text("category");
+  if (typeof body.intensity === "number") { sets.push(`intensity = $${i++}`); vals.push(Math.max(0, Math.min(10, body.intensity as number))); }
+  if (typeof body.image_url === "string" || body.image_url === null) { sets.push(`image_url = $${i++}`); vals.push((body.image_url as string) || null); }
+  if (!sets.length) return c.json({ error: "Nothing to update" }, 400);
+  vals.push(task.id);
+  const updated = await one<Task>(`UPDATE tasks SET ${sets.join(", ")}, updated_at = now() WHERE id = $${i} RETURNING *`, vals);
+  return c.json(updated);
+});
+
+// Card activity for invited members — human comments only (system notes and
+// coding-agent write-ups are the owner's workflow).
+app.get("/invited/:token/tasks/:id/comments", async (c) => {
+  const token = c.req.param("token");
+  const inv = await one<{ board_id: number }>(
+    "SELECT board_id FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
+    [token]
+  );
+  if (!inv) return c.json({ error: "Invalid or expired invitation" }, 404);
+  const task = await invitedTask(inv.board_id, parseInt(c.req.param("id")));
+  if (!task) return c.json({ error: "Card not found" }, 404);
+  const comments = await query(INVITED_COMMENTS_SQL, [task.id]);
+  return c.json(comments);
+});
+
+app.post("/invited/:token/tasks/:id/comments", async (c) => {
+  if (!(await rateLimit(c, "invited-task", 30, 60))) return c.json({ error: "Too many requests. Please wait a minute." }, 429);
+  const inv = await invitedEditor(c.req.param("token"));
+  if (!inv) return c.json({ error: "Invalid or expired invitation" }, 404);
+  const task = await invitedTask(inv.board_id, parseInt(c.req.param("id")));
+  if (!task) return c.json({ error: "Card not found" }, 404);
+  if (!inv.allowed.includes(task.column_id)) return c.json({ error: "You don't have access to that phase" }, 403);
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const text = typeof body.body === "string" ? (body.body as string).trim() : "";
+  if (!text) return c.json({ error: "body is required" }, 400);
+  const author = typeof body.author === "string" && (body.author as string).trim() ? (body.author as string).trim() : "Tester";
+  const row = await one(
+    "INSERT INTO task_comments (task_id, author, body, is_system) VALUES ($1, $2, $3, false) RETURNING id, author, body, is_system, created_at",
+    [task.id, author, text]
+  );
+  return c.json(row, 201);
 });
 
 export default app;

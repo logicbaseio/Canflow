@@ -64,6 +64,29 @@ export default function InviteList({ boardId, columns, refreshKey = 0 }: InviteL
     }
   };
 
+  const toggleAccess = async (inv: Invitation) => {
+    const next = inv.access === 'viewer' ? 'editor' : 'viewer';
+    setBusyId(inv.id);
+    try {
+      const r = await authedFetch(`/api/invitations/${inv.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access: next }),
+      });
+      if (r.ok) {
+        toast(next === 'viewer' ? 'Switched to view only' : 'Switched to editor');
+        load();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        toast(d.error || 'Failed to update access');
+      }
+    } catch {
+      toast('Failed to update access');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   // Remove one phase from an invite; removing the last phase revokes it fully.
   const removePhase = async (inv: Invitation, columnId: number) => {
     const remaining = grantedColumns(inv).filter((id) => id !== columnId);
@@ -137,6 +160,16 @@ export default function InviteList({ boardId, columns, refreshKey = 0 }: InviteL
                   </span>
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-1">
+                  <button
+                    onClick={() => toggleAccess(inv)}
+                    disabled={busyId === inv.id}
+                    title="Click to switch between Editor and View only"
+                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-medium transition-opacity hover:opacity-75 ${
+                      inv.access === 'viewer' ? 'bg-sky-500/10 text-sky-600' : 'bg-violet-500/10 text-violet-600'
+                    }`}
+                  >
+                    {inv.access === 'viewer' ? 'View only' : 'Editor'}
+                  </button>
                   {phases.map((col) => (
                     <span
                       key={col.id}

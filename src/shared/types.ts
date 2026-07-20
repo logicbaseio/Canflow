@@ -139,6 +139,7 @@ export const InvitationSchema = z.object({
   board_id: z.number(),
   column_id: z.number().nullable(),
   column_ids: z.array(z.number()).nullable(),
+  access: z.string().default('editor'),
   email: z.string(),
   invited_by: z.string().nullable(),
   status: z.string().default('pending'),
@@ -153,12 +154,16 @@ export const CreateInvitationSchema = z.object({
   // accepted from older clients and treated as a one-element list.
   column_ids: z.array(z.number()).optional(),
   column_id: z.number().optional(),
+  // 'editor' can add and edit cards in the granted phases; 'viewer' can only
+  // look at the board.
+  access: z.enum(['editor', 'viewer']).optional(),
   email: z.string().email(),
   invited_by: z.string().optional(),
 });
 
 export const UpdateInvitationSchema = z.object({
-  column_ids: z.array(z.number()).min(1),
+  column_ids: z.array(z.number()).min(1).optional(),
+  access: z.enum(['editor', 'viewer']).optional(),
 });
 
 // Beta Category schemas

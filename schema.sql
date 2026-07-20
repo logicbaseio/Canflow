@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS invitations (
   board_id    INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   column_id   INTEGER,            -- legacy single-phase grant; superseded by column_ids
   column_ids  INTEGER[],          -- phases this invite can add items to
+  access      TEXT DEFAULT 'editor',  -- 'editor' adds/edits in granted phases; 'viewer' views only
   email       TEXT NOT NULL,
   invited_by  TEXT,
   token       TEXT NOT NULL,
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS invitations (
 -- Migration for existing databases:
 --   ALTER TABLE invitations ADD COLUMN IF NOT EXISTS column_ids INTEGER[];
 --   UPDATE invitations SET column_ids = ARRAY[column_id] WHERE column_ids IS NULL AND column_id IS NOT NULL;
+--   ALTER TABLE invitations ADD COLUMN IF NOT EXISTS access TEXT DEFAULT 'editor';
 
 CREATE TABLE IF NOT EXISTS beta_categories (
   id          SERIAL PRIMARY KEY,

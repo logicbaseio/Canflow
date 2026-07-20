@@ -1,8 +1,8 @@
 import { useParams } from 'react-router';
 import { useState, useEffect } from 'react';
-import { Plus, Lock } from 'lucide-react';
+import { Plus, Lock, Eye } from 'lucide-react';
 import TaskModal from '@/react-app/components/TaskModal';
-import type { BoardWithColumns, CreateTask, UpdateTask, BetaCategory } from '@/shared/types';
+import type { BoardWithColumns, Task, CreateTask, UpdateTask, BetaCategory } from '@/shared/types';
 
 interface InvitedUserData {
   board: BoardWithColumns;
@@ -14,6 +14,7 @@ interface InvitedUserData {
     email: string;
     status: string;
   };
+  access?: 'editor' | 'viewer';
   allowedColumnId: number | null;
   allowedColumnIds?: number[];
 }
@@ -25,13 +26,14 @@ export default function InvitedUserPage() {
   const [error, setError] = useState<string | null>(null);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [addColumnId, setAddColumnId] = useState<number | null>(null);
+  const [openTask, setOpenTask] = useState<Task | null>(null);
   const [categories, setCategories] = useState<BetaCategory[]>([]);
 
   useEffect(() => {
     if (!token) return;
 
     fetchInvitedBoard();
-    fetchCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchInvitedBoard = async () => {
@@ -44,6 +46,7 @@ export default function InvitedUserPage() {
       const result = await response.json();
       setData(result);
       setError(null);
+      fetchCategories(result.board?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load invitation');
     } finally {
@@ -51,11 +54,11 @@ export default function InvitedUserPage() {
     }
   };
 
-  const fetchCategories = async () => {
-    if (!data?.board?.id) return;
+  const fetchCategories = async (boardId?: number) => {
+    if (!boardId) return;
 
     try {
-      const response = await fetch(`/api/beta-categories/${data.board.id}`);
+      const response = await fetch(`/api/invited/${token}/categories`);
       if (response.ok) {
         const result = await response.json();
         setCategories(result);
@@ -67,20 +70,27 @@ export default function InvitedUserPage() {
 
   const handleTaskSave = async (taskData: CreateTask | UpdateTask) => {
     try {
-      // The client picks WHICH granted phase to add to; the server validates
-      // the choice against the invite's grant set, so access can't be widened.
-      const response = await fetch(`/api/invited/${token}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...taskData, column_id: addColumnId ?? undefined }),
-      });
+      // The client picks WHICH granted phase to work in; the server validates
+      // every write against the invite's grant set, so access can't be widened.
+      const response = openTask
+        ? await fetch(`/api/invited/${token}/tasks/${openTask.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData),
+          })
+        : await fetch(`/api/invited/${token}/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...taskData, column_id: addColumnId ?? undefined }),
+          });
       if (response.ok) {
         setTaskModalOpen(false);
         setAddColumnId(null);
+        setOpenTask(null);
         fetchInvitedBoard();
       }
     } catch (error) {
-      console.error('Failed to create task:', error);
+      console.error('Failed to save task:', error);
     }
   };
 
@@ -119,11 +129,13 @@ export default function InvitedUserPage() {
   const allowedIds = data.allowedColumnIds?.length
     ? data.allowedColumnIds
     : data.allowedColumnId ? [data.allowedColumnId] : [];
+  const isViewer = data.access === 'viewer';
   const allowedTitles = data.board.columns
     .filter((col) => allowedIds.includes(col.id))
     .map((col) => `“${col.title}”`)
     .join(', ');
   const isBeta = data.board.board_type === 'beta-testing';
+  const canEditTask = (t: Task) => !isViewer && allowedIds.includes(t.column_id);
   const addLabel = isBeta ? 'Report bug / issue' : 'Add item';
   const PRIORITY: Record<string, { label: string; color: string }> = {
     high: { label: 'High', color: 'var(--danger)' },
@@ -140,7 +152,9 @@ export default function InvitedUserPage() {
           <div className="min-w-0">
             <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{data.board.title}</h1>
             <p className="truncate text-[12px] text-ink-subtle">
-              You can view the whole board and {isBeta ? 'report bugs' : 'add items'} in the {allowedTitles} {allowedIds.length > 1 ? 'phases' : 'phase'}.
+              {isViewer
+                ? 'You have view-only access to this board.'
+                : `You can view the whole board and ${isBeta ? 'report bugs' : 'add items'} in the ${allowedTitles} ${allowedIds.length > 1 ? 'phases' : 'phase'}.`}
             </p>
           </div>
         </div>
@@ -150,7 +164,7 @@ export default function InvitedUserPage() {
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 py-5">
         <div className="flex gap-4 h-full items-start">
           {data.board.columns.map((col) => {
-            const editable = allowedIds.includes(col.id);
+            const editable = !isViewer && allowedIds.includes(col.id);
             return (
               <div key={col.id} className="w-72 shrink-0 flex flex-col max-h-full">
                 <div className="mb-3 flex items-center gap-2 px-1">
@@ -159,15 +173,22 @@ export default function InvitedUserPage() {
                     {col.tasks.length}
                   </span>
                   {!editable && (
-                    <span className="ml-auto inline-flex items-center gap-1 text-[10.5px] text-ink-subtle" title="You don't have access to edit this phase">
+                    <span className="ml-auto inline-flex items-center gap-1 text-[10.5px] text-ink-subtle" title="You can open cards in this phase but not edit them">
                       <Lock size={11} /> View only
                     </span>
                   )}
                 </div>
 
-                <div className={`flex-1 min-h-0 overflow-y-auto space-y-2 ${editable ? '' : 'opacity-50 pointer-events-none select-none'}`}>
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
                   {col.tasks.map((task) => (
-                    <div key={task.id} className="card p-3">
+                    <button
+                      key={task.id}
+                      onClick={() => { setOpenTask(task); setAddColumnId(null); setTaskModalOpen(true); }}
+                      className={`card block w-full p-3 text-left transition-shadow hover:shadow-pop ${editable ? '' : 'opacity-80'}`}
+                    >
+                      {task.image_url && (
+                        <img src={task.image_url} alt="" className="mb-2 w-full max-h-36 rounded-md border border-line bg-surface-2 object-cover" />
+                      )}
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <h3 className="text-[13px] font-medium leading-5 text-ink flex-1">{task.title}</h3>
                         {isBeta && task.intensity > 0 && (
@@ -189,13 +210,16 @@ export default function InvitedUserPage() {
                         {task.category && (
                           <span className="inline-flex rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-muted">{task.category}</span>
                         )}
+                        {!editable && (
+                          <span className="ml-auto inline-flex items-center gap-1 text-[10.5px] text-ink-subtle"><Eye size={11} /></span>
+                        )}
                       </div>
-                    </div>
+                    </button>
                   ))}
 
                   {editable && (
                     <button
-                      onClick={() => { setAddColumnId(col.id); setTaskModalOpen(true); }}
+                      onClick={() => { setOpenTask(null); setAddColumnId(col.id); setTaskModalOpen(true); }}
                       className="w-full p-3 border border-dashed border-line rounded-lg text-ink-subtle hover:border-line-strong hover:text-ink-muted transition-colors flex items-center justify-center gap-2"
                     >
                       <Plus size={15} />
@@ -210,12 +234,18 @@ export default function InvitedUserPage() {
       </div>
 
       <TaskModal
+        task={openTask}
         columnId={addColumnId ?? allowedIds[0] ?? undefined}
         boardType={data.board.board_type as 'kanban' | 'roadmap' | 'beta-testing'}
         categories={categories}
         isOpen={taskModalOpen}
-        onClose={() => { setTaskModalOpen(false); setAddColumnId(null); }}
+        onClose={() => { setTaskModalOpen(false); setAddColumnId(null); setOpenTask(null); }}
         onSave={handleTaskSave}
+        readOnly={!!openTask && !canEditTask(openTask)}
+        hideAgent
+        commentsBase={`/api/invited/${token}/tasks`}
+        commentsFetch={(input, init) => fetch(input, init)}
+        authorName={data.invitation.email}
       />
     </div>
   );
