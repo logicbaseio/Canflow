@@ -7,6 +7,7 @@ import Select from '@/react-app/components/ui/Select';
 import PriorityFilter from '@/react-app/components/ui/PriorityFilter';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import PendingCard from '@/react-app/components/ui/PendingCard';
+import InviteList from '@/react-app/components/ui/InviteList';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authedFetch } from '@/react-app/lib/auth';
 import { celebrate } from '@/react-app/lib/confetti';
@@ -39,6 +40,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [inviteRefresh, setInviteRefresh] = useState(0);
 
   const publicUrl = board?.public_key ? `${window.location.origin}/public/${board.public_key}` : '';
 
@@ -59,12 +61,12 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok) {
-        if (d.emailSent) toast(`Invite emailed to ${inviteEmail.trim()}`);
+        if (d.emailSent) toast(d.reinvited ? `Invite re-sent to ${inviteEmail.trim()}` : `Invite emailed to ${inviteEmail.trim()}`);
         else if (d.inviteUrl) { await navigator.clipboard.writeText(d.inviteUrl).catch(() => {}); toast('Invite created - link copied to clipboard'); }
         else toast('Invite created');
-        setShowInviteModal(false);
         setInviteEmail('');
         setInviteColumnId(null);
+        setInviteRefresh((n) => n + 1);
       } else if (d.upgrade) {
         toast(d.error || 'Upgrade to invite more members');
       } else {
@@ -363,7 +365,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
       {/* Invite a member to a specific phase */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'var(--overlay)' }}>
-          <div className="card w-full max-w-md shadow-pop">
+          <div className="card w-full max-w-lg shadow-pop">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-line">
               <h2 className="text-[14px] font-semibold text-ink">Invite to a phase</h2>
               <button onClick={() => setShowInviteModal(false)} className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle">
@@ -391,6 +393,8 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
                   {inviting ? 'Sending…' : 'Send invite'}
                 </button>
               </div>
+
+              <InviteList boardId={boardId} columns={board.columns} refreshKey={inviteRefresh} />
             </div>
           </div>
         </div>

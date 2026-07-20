@@ -538,75 +538,102 @@ app.post("/public/:publicKey/tasks/:id/vote", zValidator("json", VoteTaskSchema)
 
 /* ----------------------------- Invitations (auth + ownership) ----------------------------- */
 
+async function sendInviteEmail(opts: {
+  email: string;
+  boardTitle: string;
+  columnName: string | null;
+  isBeta: boolean;
+  inviteUrl: string;
+}): Promise<{ sent: boolean; error: string | null }> {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_API_KEY) return { sent: false, error: "RESEND_API_KEY not configured" };
+  // Escape owner-controlled text before it goes into the email HTML.
+  const boardTitleHtml = escapeHtml(opts.boardTitle);
+  const columnNameHtml = opts.columnName ? escapeHtml(opts.columnName) : null;
+  const { isBeta, inviteUrl } = opts;
+  try {
+    const from = process.env.RESEND_FROM || "Canflow <onboarding@resend.dev>";
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from,
+        to: opts.email,
+        subject: isBeta ? `You're invited to beta test: ${opts.boardTitle}` : `You're invited to collaborate on: ${opts.boardTitle}`,
+        html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">${isBeta ? "Beta Testing Invitation" : "You're invited"}</h1><h2 style="color:#1f2937">${boardTitleHtml}</h2>${columnNameHtml ? `<p style="color:#6b7280">Phase: <strong>${columnNameHtml}</strong></p>` : ""}<p style="color:#6b7280">${isBeta ? "Help us improve by reporting bugs and feedback." : `You've been given access to the ${columnNameHtml ? `"${columnNameHtml}" phase` : "board"}. Add and view items there.`}</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">${isBeta ? "Join Beta Testing" : "Open the board"}</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
+      }),
+    });
+    const rd = (await response.json()) as { message?: string };
+    if (response.ok) return { sent: true, error: null };
+    return { sent: false, error: rd.message || `HTTP ${response.status}` };
+  } catch (error) {
+    return { sent: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
 app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) => {
   if (!(await rateLimit(c, "invite", 20, 60))) return c.json({ error: "Too many invites at once. Please wait a minute." }, 429);
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const data = c.req.valid("json");
   if (!(await ownsBoard(data.board_id, uid))) return c.json({ error: "Board not found" }, 404);
-  if (effectivePlan(await ensureSettings(uid)) === "free") {
-    const count = await one<{ n: number }>(
-      "SELECT count(*)::int AS n FROM invitations i JOIN boards b ON b.id = i.board_id WHERE b.owner_id = $1",
-      [uid]
-    );
-    if ((count?.n ?? 0) >= FREE.testers) {
-      return overLimit(c, "tester_limit", `Free plan is limited to ${FREE.testers} testers. Upgrade to Pro to invite unlimited testers.`);
-    }
-  }
-  const token = crypto.randomUUID();
 
   try {
     const board = await one<{ title: string; board_type: string }>("SELECT title, board_type FROM boards WHERE id = $1", [data.board_id]);
     if (!board) return c.json({ error: "Board not found" }, 404);
     const isBeta = board.board_type === "beta-testing";
 
+    // Re-inviting an email that already has an invite on this board reuses the
+    // existing row (same token/link) instead of consuming another tester slot.
+    const existing = await one<{ id: number; token: string }>(
+      "SELECT id, token FROM invitations WHERE board_id = $1 AND lower(email) = lower($2)",
+      [data.board_id, data.email]
+    );
+
+    if (!existing && effectivePlan(await ensureSettings(uid)) === "free") {
+      const count = await one<{ n: number }>(
+        "SELECT count(*)::int AS n FROM invitations i JOIN boards b ON b.id = i.board_id WHERE b.owner_id = $1",
+        [uid]
+      );
+      if ((count?.n ?? 0) >= FREE.testers) {
+        return overLimit(c, "tester_limit", `Free plan is limited to ${FREE.testers} testers. Upgrade to Pro to invite unlimited testers.`);
+      }
+    }
+
+    let invitation;
+    if (existing) {
+      invitation = await one(
+        `UPDATE invitations SET column_id = $1, updated_at = now() WHERE id = $2 RETURNING *`,
+        [data.column_id ?? null, existing.id]
+      );
+    } else {
+      invitation = await one(
+        `INSERT INTO invitations (board_id, column_id, email, invited_by, token, updated_at)
+         VALUES ($1, $2, $3, $4, $5, now()) RETURNING *`,
+        [data.board_id, data.column_id ?? null, data.email, data.invited_by ?? null, crypto.randomUUID()]
+      );
+    }
+
     let columnName: string | null = null;
     if (data.column_id) {
       const column = await one<{ title: string }>("SELECT title FROM columns WHERE id = $1", [data.column_id]);
       columnName = column?.title ?? null;
     }
-    // Escape owner-controlled text before it goes into the email HTML.
-    const boardTitleHtml = escapeHtml(board.title);
-    const columnNameHtml = columnName ? escapeHtml(columnName) : null;
 
-    const invitation = await one(
-      `INSERT INTO invitations (board_id, column_id, email, invited_by, token, updated_at)
-       VALUES ($1, $2, $3, $4, $5, now()) RETURNING *`,
-      [data.board_id, data.column_id ?? null, data.email, data.invited_by ?? null, token]
-    );
-
-    const inviteUrl = `${new URL(c.req.url).origin}/invited/${token}`;
-    let emailSent = false;
-    let emailError: string | null = null;
-    const RESEND_API_KEY = process.env.RESEND_API_KEY;
-
-    if (RESEND_API_KEY) {
-      try {
-        const from = process.env.RESEND_FROM || "Canflow <onboarding@resend.dev>";
-        const response = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from,
-            to: data.email,
-            subject: isBeta ? `You're invited to beta test: ${board.title}` : `You're invited to collaborate on: ${board.title}`,
-            html: `<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h1 style="color:#1f2937">${isBeta ? "Beta Testing Invitation" : "You're invited"}</h1><h2 style="color:#1f2937">${boardTitleHtml}</h2>${columnNameHtml ? `<p style="color:#6b7280">Phase: <strong>${columnNameHtml}</strong></p>` : ""}<p style="color:#6b7280">${isBeta ? "Help us improve by reporting bugs and feedback." : `You've been given access to the ${columnNameHtml ? `"${columnNameHtml}" phase` : "board"}. Add and view items there.`}</p><p><a href="${inviteUrl}" style="background:#1d1d1f;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block">${isBeta ? "Join Beta Testing" : "Open the board"}</a></p><p style="word-break:break-all;background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace">${inviteUrl}</p></div>`,
-          }),
-        });
-        const rd = (await response.json()) as { message?: string };
-        if (response.ok) emailSent = true;
-        else emailError = rd.message || `HTTP ${response.status}`;
-      } catch (error) {
-        emailError = error instanceof Error ? error.message : "Unknown error";
-      }
-    } else {
-      emailError = "RESEND_API_KEY not configured";
-    }
+    const inviteUrl = `${new URL(c.req.url).origin}/invited/${(invitation as { token: string }).token}`;
+    const { sent: emailSent, error: emailError } = await sendInviteEmail({
+      email: data.email,
+      boardTitle: board.title,
+      columnName,
+      isBeta,
+      inviteUrl,
+    });
 
     return c.json(
       {
         success: true,
         invitation,
+        reinvited: !!existing,
         emailSent,
         emailError,
         inviteUrl,
@@ -614,7 +641,7 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
           ? `Invitation email sent successfully to ${data.email}!`
           : `Invitation created successfully! Share this link manually: ${inviteUrl}`,
       },
-      201
+      existing ? 200 : 201
     );
   } catch (error) {
     console.error("Database error creating invitation:", error);
@@ -629,6 +656,50 @@ app.get("/invitations/:boardId", async (c) => {
   if (!(await ownsBoard(boardId, uid))) return c.json({ error: "Board not found" }, 404);
   const invitations = await query("SELECT * FROM invitations WHERE board_id = $1 ORDER BY created_at DESC", [boardId]);
   return c.json(invitations);
+});
+
+// Re-send the invite email for an existing invitation (same link/token).
+app.post("/invitations/:id/resend", async (c) => {
+  if (!(await rateLimit(c, "invite", 20, 60))) return c.json({ error: "Too many invites at once. Please wait a minute." }, 429);
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  const inv = await one<{ id: number; email: string; token: string; column_id: number | null; title: string; board_type: string }>(
+    `SELECT i.id, i.email, i.token, i.column_id, b.title, b.board_type
+     FROM invitations i JOIN boards b ON b.id = i.board_id
+     WHERE i.id = $1 AND b.owner_id = $2`,
+    [id, uid]
+  );
+  if (!inv) return c.json({ error: "Invitation not found" }, 404);
+  let columnName: string | null = null;
+  if (inv.column_id) {
+    const column = await one<{ title: string }>("SELECT title FROM columns WHERE id = $1", [inv.column_id]);
+    columnName = column?.title ?? null;
+  }
+  const inviteUrl = `${new URL(c.req.url).origin}/invited/${inv.token}`;
+  const { sent: emailSent, error: emailError } = await sendInviteEmail({
+    email: inv.email,
+    boardTitle: inv.title,
+    columnName,
+    isBeta: inv.board_type === "beta-testing",
+    inviteUrl,
+  });
+  return c.json({ success: true, emailSent, emailError, inviteUrl });
+});
+
+// Revoke an invitation — its link stops working immediately.
+app.delete("/invitations/:id", async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  const row = await one<{ id: number }>(
+    `DELETE FROM invitations i USING boards b
+     WHERE i.id = $1 AND b.id = i.board_id AND b.owner_id = $2
+     RETURNING i.id`,
+    [id, uid]
+  );
+  if (!row) return c.json({ error: "Invitation not found" }, 404);
+  return c.json({ success: true });
 });
 
 /* ----------------------------- Beta categories (auth + ownership) ----------------------------- */
@@ -1190,11 +1261,15 @@ app.post("/github/webhook", async (c) => {
 
 app.get("/invited/:token", async (c) => {
   const token = c.req.param("token");
-  const invitation = await one<{ board_id: number; column_id: number | null }>(
-    "SELECT * FROM invitations WHERE token = $1 AND status = 'pending'",
+  const invitation = await one<{ board_id: number; column_id: number | null; status: string }>(
+    "SELECT * FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
     [token]
   );
   if (!invitation) return c.json({ error: "Invalid or expired invitation" }, 404);
+  // First open marks the invite accepted, so the owner can see who joined.
+  if (invitation.status === "pending") {
+    await query("UPDATE invitations SET status = 'accepted', updated_at = now() WHERE token = $1", [token]);
+  }
   const board = await one<Board>("SELECT * FROM boards WHERE id = $1", [invitation.board_id]);
   if (!board) return c.json({ error: "Board not found" }, 404);
   const boardWithColumns = await assembleBoard(board);
@@ -1207,7 +1282,7 @@ app.post("/invited/:token/tasks", async (c) => {
   if (!(await rateLimit(c, "invited-task", 30, 60))) return c.json({ error: "Too many requests. Please wait a minute." }, 429);
   const token = c.req.param("token");
   const invitation = await one<{ column_id: number | null }>(
-    "SELECT column_id FROM invitations WHERE token = $1 AND status = 'pending'",
+    "SELECT column_id FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
     [token]
   );
   if (!invitation || !invitation.column_id) return c.json({ error: "Invalid or expired invitation" }, 404);

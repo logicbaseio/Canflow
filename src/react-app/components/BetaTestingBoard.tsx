@@ -9,6 +9,7 @@ import Select from '@/react-app/components/ui/Select';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import AutopilotMenu from '@/react-app/components/ui/AutopilotMenu';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
+import InviteList from '@/react-app/components/ui/InviteList';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import { authedFetch } from '@/react-app/lib/auth';
 import { useBoardDnd } from '@/react-app/hooks/useBoardDnd';
@@ -32,6 +33,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
   const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRefresh, setInviteRefresh] = useState(0);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [fixingTask, setFixingTask] = useState<Task | null>(null);
   const [fixAgent, setFixAgent] = useState<'claude' | 'codex' | null>(null);
@@ -129,7 +131,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
 
       if (response.ok) {
         if (responseData.emailSent) {
-          toast(`Invite emailed to ${inviteEmail.trim()}`);
+          toast(responseData.reinvited ? `Invite re-sent to ${inviteEmail.trim()}` : `Invite emailed to ${inviteEmail.trim()}`);
         } else if (responseData.inviteUrl) {
           await navigator.clipboard.writeText(responseData.inviteUrl).catch(() => {});
           toast('Invite created - link copied to clipboard');
@@ -138,13 +140,14 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
         }
         setInviteEmail('');
         setInviteColumnId(null);
-        setShowInviteModal(false);
+        setInviteRefresh((n) => n + 1);
       } else {
+        // Surface the server's actual reason (e.g. the free-plan tester limit).
         throw new Error(responseData.error || `HTTP ${response.status}`);
       }
     } catch (error) {
       console.error('Failed to send invitation:', error);
-      toast('Failed to create invite');
+      toast(error instanceof Error && error.message ? error.message : 'Failed to create invite');
     }
   };
 
@@ -276,7 +279,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'var(--overlay)' }}
         >
-          <div className="card w-full max-w-md shadow-pop">
+          <div className="card w-full max-w-lg shadow-pop">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-line">
               <h2 className="text-[14px] font-semibold text-ink">Invite beta tester</h2>
               <button
@@ -336,6 +339,8 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
                   Send invite
                 </button>
               </div>
+
+              <InviteList boardId={boardId} columns={board.columns} refreshKey={inviteRefresh} />
             </div>
           </div>
         </div>
