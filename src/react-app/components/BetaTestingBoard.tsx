@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { Plus, Settings, UserPlus, X } from 'lucide-react';
+import { Check, Plus, Settings, UserPlus, X } from 'lucide-react';
 import BetaColumn from './BetaColumn';
 import BetaTaskCard from './BetaTaskCard';
 import TaskModal from './TaskModal';
 import FixWithModal from './FixWithModal';
-import Select from '@/react-app/components/ui/Select';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
 import AutopilotMenu from '@/react-app/components/ui/AutopilotMenu';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
@@ -31,9 +30,12 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   const [pendingColumnId, setPendingColumnId] = useState<number | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
-  const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
+  const [inviteColumnIds, setInviteColumnIds] = useState<number[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRefresh, setInviteRefresh] = useState(0);
+
+  const toggleInviteColumn = (columnId: number) =>
+    setInviteColumnIds((ids) => (ids.includes(columnId) ? ids.filter((id) => id !== columnId) : [...ids, columnId]));
   const [newCategoryName, setNewCategoryName] = useState('');
   const [fixingTask, setFixingTask] = useState<Task | null>(null);
   const [fixAgent, setFixAgent] = useState<'claude' | 'codex' | null>(null);
@@ -105,13 +107,13 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
   };
 
   const handleInviteToColumn = (columnId: number) => {
-    setInviteColumnId(columnId);
+    setInviteColumnIds([columnId]);
     setShowInviteModal(true);
   };
 
   const handleInviteUser = async () => {
-    if (!inviteEmail.trim() || !inviteColumnId) {
-      toast('Enter an email and select a phase');
+    if (!inviteEmail.trim() || inviteColumnIds.length === 0) {
+      toast('Enter an email and select at least one phase');
       return;
     }
 
@@ -121,7 +123,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           board_id: boardId,
-          column_id: inviteColumnId,
+          column_ids: inviteColumnIds,
           email: inviteEmail.trim(),
           invited_by: 'admin',
         }),
@@ -139,7 +141,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
           toast('Invite created');
         }
         setInviteEmail('');
-        setInviteColumnId(null);
+        setInviteColumnIds([]);
         setInviteRefresh((n) => n + 1);
       } else {
         // Surface the server's actual reason (e.g. the free-plan tester limit).
@@ -286,7 +288,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
                 onClick={() => {
                   setShowInviteModal(false);
                   setInviteEmail('');
-                  setInviteColumnId(null);
+                  setInviteColumnIds([]);
                 }}
                 className="btn btn-ghost h-7 w-7 p-0 text-ink-subtle"
               >
@@ -310,14 +312,32 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
 
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-ink-muted">
-                  Assign to phase
+                  Give access to phases
                 </label>
-                <Select
-                  value={inviteColumnId ? String(inviteColumnId) : ''}
-                  onChange={(v) => setInviteColumnId(v ? parseInt(v) : null)}
-                  options={board.columns.map((column) => ({ value: String(column.id), label: column.title }))}
-                  placeholder="Select a phase…"
-                />
+                <div className="flex flex-wrap gap-1.5">
+                  {board.columns.map((column) => {
+                    const on = inviteColumnIds.includes(column.id);
+                    return (
+                      <button
+                        key={column.id}
+                        type="button"
+                        onClick={() => toggleInviteColumn(column.id)}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-medium transition-colors ${
+                          on
+                            ? 'border-transparent'
+                            : 'border-line text-ink-muted hover:border-line-strong hover:text-ink'
+                        }`}
+                        style={on ? { background: 'var(--accent)', color: 'var(--accent-fg)' } : undefined}
+                      >
+                        {on && <Check size={12} />}
+                        {column.title}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-ink-subtle">
+                  One invite covers every selected phase - you can remove phase access later from the list below.
+                </p>
               </div>
 
               <div className="flex gap-2 pt-1">
@@ -325,7 +345,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
                   onClick={() => {
                     setShowInviteModal(false);
                     setInviteEmail('');
-                    setInviteColumnId(null);
+                    setInviteColumnIds([]);
                   }}
                   className="btn btn-outline flex-1 h-9"
                 >
@@ -333,7 +353,7 @@ export default function BetaTestingBoard({ boardId, onBoardChanged }: BetaTestin
                 </button>
                 <button
                   onClick={handleInviteUser}
-                  disabled={!inviteEmail.trim() || !inviteColumnId}
+                  disabled={!inviteEmail.trim() || inviteColumnIds.length === 0}
                   className="btn btn-primary flex-1 h-9"
                 >
                   Send invite

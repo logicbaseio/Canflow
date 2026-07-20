@@ -138,6 +138,7 @@ export const InvitationSchema = z.object({
   id: z.number(),
   board_id: z.number(),
   column_id: z.number().nullable(),
+  column_ids: z.array(z.number()).nullable(),
   email: z.string(),
   invited_by: z.string().nullable(),
   status: z.string().default('pending'),
@@ -148,9 +149,16 @@ export const InvitationSchema = z.object({
 
 export const CreateInvitationSchema = z.object({
   board_id: z.number(),
+  // One invite covers every phase the tester should access. column_id is
+  // accepted from older clients and treated as a one-element list.
+  column_ids: z.array(z.number()).optional(),
   column_id: z.number().optional(),
   email: z.string().email(),
   invited_by: z.string().optional(),
+});
+
+export const UpdateInvitationSchema = z.object({
+  column_ids: z.array(z.number()).min(1),
 });
 
 // Beta Category schemas
@@ -186,6 +194,7 @@ export type VoteTask = z.infer<typeof VoteTaskSchema>;
 
 export type Invitation = z.infer<typeof InvitationSchema>;
 export type CreateInvitation = z.infer<typeof CreateInvitationSchema>;
+export type UpdateInvitation = z.infer<typeof UpdateInvitationSchema>;
 
 export type BetaCategory = z.infer<typeof BetaCategorySchema>;
 export type CreateBetaCategory = z.infer<typeof CreateBetaCategorySchema>;

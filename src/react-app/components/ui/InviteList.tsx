@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Clock, Copy, Send, Trash2 } from 'lucide-react';
+import { Check, Clock, Copy, Send, Trash2, X } from 'lucide-react';
 import { authedFetch } from '@/react-app/lib/auth';
 import { useDialog } from '@/react-app/components/ui/Dialog';
 import type { Invitation } from '@/shared/types';
+
+// Granted phases with fallback to the legacy single-column field.
+function grantedColumns(inv: Invitation): number[] {
+  if (inv.column_ids?.length) return inv.column_ids;
+  return inv.column_id ? [inv.column_id] : [];
+}
 
 interface InviteListProps {
   boardId: number;
@@ -58,6 +64,34 @@ export default function InviteList({ boardId, columns, refreshKey = 0 }: InviteL
     }
   };
 
+  // Remove one phase from an invite; removing the last phase revokes it fully.
+  const removePhase = async (inv: Invitation, columnId: number) => {
+    const remaining = grantedColumns(inv).filter((id) => id !== columnId);
+    if (remaining.length === 0) {
+      revoke(inv);
+      return;
+    }
+    setBusyId(inv.id);
+    try {
+      const r = await authedFetch(`/api/invitations/${inv.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ column_ids: remaining }),
+      });
+      if (r.ok) {
+        toast('Phase access removed');
+        load();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        toast(d.error || 'Failed to update access');
+      }
+    } catch {
+      toast('Failed to update access');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const revoke = async (inv: Invitation) => {
     if (!(await confirm({
       title: 'Revoke invite',
@@ -89,16 +123,37 @@ export default function InviteList({ boardId, columns, refreshKey = 0 }: InviteL
       <p className="mb-2 text-[12px] font-medium text-ink-muted">Sent invites</p>
       <div className="max-h-52 overflow-y-auto rounded-lg border border-line divide-y divide-line">
         {invites.map((inv) => {
-          const phase = columns.find((col) => col.id === inv.column_id)?.title;
+          const phases = grantedColumns(inv)
+            .map((id) => columns.find((col) => col.id === id))
+            .filter((col): col is { id: number; title: string } => !!col);
           const accepted = inv.status === 'accepted';
           return (
             <div key={inv.id} className="flex items-center gap-2 px-3 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[12.5px] text-ink">{inv.email}</p>
-                <p className="truncate text-[11px] text-ink-subtle">
-                  {phase ? `${phase} · ` : ''}
-                  {new Date(inv.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                <p className="truncate text-[12.5px] text-ink">
+                  {inv.email}
+                  <span className="ml-1.5 text-[11px] text-ink-subtle">
+                    {new Date(inv.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </span>
                 </p>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {phases.map((col) => (
+                    <span
+                      key={col.id}
+                      className="inline-flex items-center gap-0.5 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-medium text-ink-muted"
+                    >
+                      {col.title}
+                      <button
+                        onClick={() => removePhase(inv, col.id)}
+                        disabled={busyId === inv.id}
+                        title={phases.length > 1 ? `Remove access to ${col.title}` : 'Removing the last phase revokes the invite'}
+                        className="ml-0.5 rounded-sm text-ink-subtle transition-colors hover:text-red-500"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
               </div>
               <span
                 className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium ${

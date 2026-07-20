@@ -16,6 +16,7 @@ import {
   MoveTaskSchema,
   VoteTaskSchema,
   CreateInvitationSchema,
+  UpdateInvitationSchema,
   CreateBetaCategorySchema,
   type BoardWithColumns,
   type Board,
@@ -571,6 +572,31 @@ async function sendInviteEmail(opts: {
   }
 }
 
+// Resolve an invite's granted phases: new multi-phase grants with a fallback
+// to the legacy single-column field.
+function grantedColumns(inv: { column_ids?: number[] | null; column_id?: number | null }): number[] {
+  if (inv.column_ids?.length) return inv.column_ids;
+  return inv.column_id ? [inv.column_id] : [];
+}
+
+// Keep only the requested column ids that actually belong to this board, so a
+// grant can never reach into another board's phases.
+async function validBoardColumns(boardId: number, requested: number[]): Promise<number[]> {
+  if (!requested.length) return [];
+  const rows = await query<{ id: number }>("SELECT id FROM columns WHERE board_id = $1", [boardId]);
+  const own = new Set(rows.map((r) => r.id));
+  return [...new Set(requested)].filter((id) => own.has(id));
+}
+
+async function columnTitles(ids: number[]): Promise<string | null> {
+  if (!ids.length) return null;
+  const rows = await query<{ id: number; title: string }>(
+    "SELECT id, title FROM columns WHERE id = ANY($1::int[]) ORDER BY position",
+    [ids]
+  );
+  return rows.length ? rows.map((r) => r.title).join(", ") : null;
+}
+
 app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) => {
   if (!(await rateLimit(c, "invite", 20, 60))) return c.json({ error: "Too many invites at once. Please wait a minute." }, 429);
   const uid = await getUserId(c);
@@ -583,10 +609,14 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
     if (!board) return c.json({ error: "Board not found" }, 404);
     const isBeta = board.board_type === "beta-testing";
 
+    const requested = data.column_ids?.length ? data.column_ids : data.column_id ? [data.column_id] : [];
+    const columnIds = await validBoardColumns(data.board_id, requested);
+    if (!columnIds.length) return c.json({ error: "Select at least one phase to give access to" }, 400);
+
     // Re-inviting an email that already has an invite on this board reuses the
     // existing row (same token/link) instead of consuming another tester slot.
-    const existing = await one<{ id: number; token: string }>(
-      "SELECT id, token FROM invitations WHERE board_id = $1 AND lower(email) = lower($2)",
+    const existing = await one<{ id: number; token: string; column_ids: number[] | null; column_id: number | null }>(
+      "SELECT id, token, column_ids, column_id FROM invitations WHERE board_id = $1 AND lower(email) = lower($2)",
       [data.board_id, data.email]
     );
 
@@ -602,23 +632,21 @@ app.post("/invitations", zValidator("json", CreateInvitationSchema), async (c) =
 
     let invitation;
     if (existing) {
+      // Re-invite widens access: union of already-granted and newly-selected phases.
+      const merged = [...new Set([...grantedColumns(existing), ...columnIds])];
       invitation = await one(
-        `UPDATE invitations SET column_id = $1, updated_at = now() WHERE id = $2 RETURNING *`,
-        [data.column_id ?? null, existing.id]
+        `UPDATE invitations SET column_ids = $1, column_id = $2, updated_at = now() WHERE id = $3 RETURNING *`,
+        [merged, merged[0], existing.id]
       );
     } else {
       invitation = await one(
-        `INSERT INTO invitations (board_id, column_id, email, invited_by, token, updated_at)
-         VALUES ($1, $2, $3, $4, $5, now()) RETURNING *`,
-        [data.board_id, data.column_id ?? null, data.email, data.invited_by ?? null, crypto.randomUUID()]
+        `INSERT INTO invitations (board_id, column_ids, column_id, email, invited_by, token, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, now()) RETURNING *`,
+        [data.board_id, columnIds, columnIds[0], data.email, data.invited_by ?? null, crypto.randomUUID()]
       );
     }
 
-    let columnName: string | null = null;
-    if (data.column_id) {
-      const column = await one<{ title: string }>("SELECT title FROM columns WHERE id = $1", [data.column_id]);
-      columnName = column?.title ?? null;
-    }
+    const columnName = await columnTitles(grantedColumns(invitation as { column_ids: number[] | null; column_id: number | null }));
 
     const inviteUrl = `${new URL(c.req.url).origin}/invited/${(invitation as { token: string }).token}`;
     const { sent: emailSent, error: emailError } = await sendInviteEmail({
@@ -664,18 +692,14 @@ app.post("/invitations/:id/resend", async (c) => {
   const uid = await getUserId(c);
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
   const id = parseInt(c.req.param("id"));
-  const inv = await one<{ id: number; email: string; token: string; column_id: number | null; title: string; board_type: string }>(
-    `SELECT i.id, i.email, i.token, i.column_id, b.title, b.board_type
+  const inv = await one<{ id: number; email: string; token: string; column_id: number | null; column_ids: number[] | null; title: string; board_type: string }>(
+    `SELECT i.id, i.email, i.token, i.column_id, i.column_ids, b.title, b.board_type
      FROM invitations i JOIN boards b ON b.id = i.board_id
      WHERE i.id = $1 AND b.owner_id = $2`,
     [id, uid]
   );
   if (!inv) return c.json({ error: "Invitation not found" }, 404);
-  let columnName: string | null = null;
-  if (inv.column_id) {
-    const column = await one<{ title: string }>("SELECT title FROM columns WHERE id = $1", [inv.column_id]);
-    columnName = column?.title ?? null;
-  }
+  const columnName = await columnTitles(grantedColumns(inv));
   const inviteUrl = `${new URL(c.req.url).origin}/invited/${inv.token}`;
   const { sent: emailSent, error: emailError } = await sendInviteEmail({
     email: inv.email,
@@ -685,6 +709,27 @@ app.post("/invitations/:id/resend", async (c) => {
     inviteUrl,
   });
   return c.json({ success: true, emailSent, emailError, inviteUrl });
+});
+
+// Edit which phases an invite can access (e.g. remove one phase's access).
+// Revoking the whole invite is DELETE below.
+app.patch("/invitations/:id", zValidator("json", UpdateInvitationSchema), async (c) => {
+  const uid = await getUserId(c);
+  if (!uid) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  const inv = await one<{ id: number; board_id: number }>(
+    `SELECT i.id, i.board_id FROM invitations i JOIN boards b ON b.id = i.board_id
+     WHERE i.id = $1 AND b.owner_id = $2`,
+    [id, uid]
+  );
+  if (!inv) return c.json({ error: "Invitation not found" }, 404);
+  const columnIds = await validBoardColumns(inv.board_id, c.req.valid("json").column_ids);
+  if (!columnIds.length) return c.json({ error: "An invite needs at least one phase - revoke it instead to remove all access" }, 400);
+  const updated = await one(
+    `UPDATE invitations SET column_ids = $1, column_id = $2, updated_at = now() WHERE id = $3 RETURNING *`,
+    [columnIds, columnIds[0], id]
+  );
+  return c.json({ success: true, invitation: updated });
 });
 
 // Revoke an invitation — its link stops working immediately.
@@ -1261,7 +1306,7 @@ app.post("/github/webhook", async (c) => {
 
 app.get("/invited/:token", async (c) => {
   const token = c.req.param("token");
-  const invitation = await one<{ board_id: number; column_id: number | null; status: string }>(
+  const invitation = await one<{ board_id: number; column_id: number | null; column_ids: number[] | null; status: string }>(
     "SELECT * FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
     [token]
   );
@@ -1273,23 +1318,33 @@ app.get("/invited/:token", async (c) => {
   const board = await one<Board>("SELECT * FROM boards WHERE id = $1", [invitation.board_id]);
   if (!board) return c.json({ error: "Board not found" }, 404);
   const boardWithColumns = await assembleBoard(board);
-  return c.json({ board: boardWithColumns, invitation, allowedColumnId: invitation.column_id });
+  const allowed = grantedColumns(invitation);
+  return c.json({
+    board: boardWithColumns,
+    invitation,
+    allowedColumnId: allowed[0] ?? null, // legacy single-phase field
+    allowedColumnIds: allowed,
+  });
 });
 
-// Invited members add items ONLY to the column they were granted. The column is
-// taken from the invite token, never the client, so access can't be widened.
+// Invited members add items ONLY to columns they were granted. The grant set
+// comes from the invite token, never the client, so access can't be widened —
+// the client may pick WHICH granted column, but nothing outside the set.
 app.post("/invited/:token/tasks", async (c) => {
   if (!(await rateLimit(c, "invited-task", 30, 60))) return c.json({ error: "Too many requests. Please wait a minute." }, 429);
   const token = c.req.param("token");
-  const invitation = await one<{ column_id: number | null }>(
-    "SELECT column_id FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
+  const invitation = await one<{ column_id: number | null; column_ids: number[] | null }>(
+    "SELECT column_id, column_ids FROM invitations WHERE token = $1 AND status IN ('pending', 'accepted')",
     [token]
   );
-  if (!invitation || !invitation.column_id) return c.json({ error: "Invalid or expired invitation" }, 404);
+  const allowed = invitation ? grantedColumns(invitation) : [];
+  if (!allowed.length) return c.json({ error: "Invalid or expired invitation" }, 404);
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const title = typeof body.title === "string" ? body.title.trim() : "";
   if (!title) return c.json({ error: "Title is required" }, 400);
-  const colId = invitation.column_id;
+  const requestedCol = typeof body.column_id === "number" ? body.column_id : allowed[0];
+  if (!allowed.includes(requestedCol)) return c.json({ error: "You don't have access to that phase" }, 403);
+  const colId = requestedCol;
   const posRow = await one<{ n: number }>("SELECT COALESCE(MAX(position) + 1, 0) AS n FROM tasks WHERE column_id = $1", [colId]);
   const task = await one<Task>(
     `INSERT INTO tasks (column_id, title, description, position, priority, start_date, due_date, category, intensity, updated_at)

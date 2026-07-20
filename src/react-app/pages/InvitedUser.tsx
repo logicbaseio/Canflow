@@ -10,10 +10,12 @@ interface InvitedUserData {
     id: number;
     board_id: number;
     column_id: number | null;
+    column_ids: number[] | null;
     email: string;
     status: string;
   };
   allowedColumnId: number | null;
+  allowedColumnIds?: number[];
 }
 
 export default function InvitedUserPage() {
@@ -22,6 +24,7 @@ export default function InvitedUserPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [addColumnId, setAddColumnId] = useState<number | null>(null);
   const [categories, setCategories] = useState<BetaCategory[]>([]);
 
   useEffect(() => {
@@ -64,15 +67,16 @@ export default function InvitedUserPage() {
 
   const handleTaskSave = async (taskData: CreateTask | UpdateTask) => {
     try {
-      // The server forces the task into the invited column, so the client
-      // can't add to any phase other than the one it was granted.
+      // The client picks WHICH granted phase to add to; the server validates
+      // the choice against the invite's grant set, so access can't be widened.
       const response = await fetch(`/api/invited/${token}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData),
+        body: JSON.stringify({ ...taskData, column_id: addColumnId ?? undefined }),
       });
       if (response.ok) {
         setTaskModalOpen(false);
+        setAddColumnId(null);
         fetchInvitedBoard();
       }
     } catch (error) {
@@ -112,7 +116,13 @@ export default function InvitedUserPage() {
     );
   }
 
-  const allowedColumn = data.board.columns.find(col => col.id === data.allowedColumnId);
+  const allowedIds = data.allowedColumnIds?.length
+    ? data.allowedColumnIds
+    : data.allowedColumnId ? [data.allowedColumnId] : [];
+  const allowedTitles = data.board.columns
+    .filter((col) => allowedIds.includes(col.id))
+    .map((col) => `“${col.title}”`)
+    .join(', ');
   const isBeta = data.board.board_type === 'beta-testing';
   const addLabel = isBeta ? 'Report bug / issue' : 'Add item';
   const PRIORITY: Record<string, { label: string; color: string }> = {
@@ -130,7 +140,7 @@ export default function InvitedUserPage() {
           <div className="min-w-0">
             <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{data.board.title}</h1>
             <p className="truncate text-[12px] text-ink-subtle">
-              You can view the whole board and {isBeta ? 'report bugs' : 'add items'} in the “{allowedColumn?.title}” phase.
+              You can view the whole board and {isBeta ? 'report bugs' : 'add items'} in the {allowedTitles} {allowedIds.length > 1 ? 'phases' : 'phase'}.
             </p>
           </div>
         </div>
@@ -140,7 +150,7 @@ export default function InvitedUserPage() {
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 py-5">
         <div className="flex gap-4 h-full items-start">
           {data.board.columns.map((col) => {
-            const editable = col.id === data.allowedColumnId;
+            const editable = allowedIds.includes(col.id);
             return (
               <div key={col.id} className="w-72 shrink-0 flex flex-col max-h-full">
                 <div className="mb-3 flex items-center gap-2 px-1">
@@ -185,7 +195,7 @@ export default function InvitedUserPage() {
 
                   {editable && (
                     <button
-                      onClick={() => setTaskModalOpen(true)}
+                      onClick={() => { setAddColumnId(col.id); setTaskModalOpen(true); }}
                       className="w-full p-3 border border-dashed border-line rounded-lg text-ink-subtle hover:border-line-strong hover:text-ink-muted transition-colors flex items-center justify-center gap-2"
                     >
                       <Plus size={15} />
@@ -200,11 +210,11 @@ export default function InvitedUserPage() {
       </div>
 
       <TaskModal
-        columnId={data.allowedColumnId || undefined}
+        columnId={addColumnId ?? allowedIds[0] ?? undefined}
         boardType={data.board.board_type as 'kanban' | 'roadmap' | 'beta-testing'}
         categories={categories}
         isOpen={taskModalOpen}
-        onClose={() => setTaskModalOpen(false)}
+        onClose={() => { setTaskModalOpen(false); setAddColumnId(null); }}
         onSave={handleTaskSave}
       />
     </div>

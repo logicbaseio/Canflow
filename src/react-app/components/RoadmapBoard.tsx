@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Plus, Share2, Globe, Eye, Copy, ArrowUp, MoreHorizontal, Edit2, Trash2, UserPlus, X } from 'lucide-react';
+import { Check, Plus, Share2, Globe, Eye, Copy, ArrowUp, MoreHorizontal, Edit2, Trash2, UserPlus, X } from 'lucide-react';
 import TaskModal from './TaskModal';
 import ShareBoardModal from './ShareBoardModal';
 import EditableTitle from '@/react-app/components/ui/EditableTitle';
-import Select from '@/react-app/components/ui/Select';
 import PriorityFilter from '@/react-app/components/ui/PriorityFilter';
 import BoardLoader from '@/react-app/components/ui/BoardLoader';
 import PendingCard from '@/react-app/components/ui/PendingCard';
@@ -38,26 +37,29 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
   const [priorityFilter, setPriorityFilter] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteColumnId, setInviteColumnId] = useState<number | null>(null);
+  const [inviteColumnIds, setInviteColumnIds] = useState<number[]>([]);
   const [inviting, setInviting] = useState(false);
   const [inviteRefresh, setInviteRefresh] = useState(0);
+
+  const toggleInviteColumn = (columnId: number) =>
+    setInviteColumnIds((ids) => (ids.includes(columnId) ? ids.filter((id) => id !== columnId) : [...ids, columnId]));
 
   const publicUrl = board?.public_key ? `${window.location.origin}/public/${board.public_key}` : '';
 
   const openInvite = (columnId?: number) => {
-    setInviteColumnId(columnId ?? null);
+    setInviteColumnIds(columnId ? [columnId] : []);
     setInviteEmail('');
     setShowInviteModal(true);
   };
 
   const handleInviteUser = async () => {
-    if (!inviteEmail.trim() || !inviteColumnId) return;
+    if (!inviteEmail.trim() || inviteColumnIds.length === 0) return;
     setInviting(true);
     try {
       const res = await authedFetch('/api/invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ board_id: boardId, column_id: inviteColumnId, email: inviteEmail.trim(), invited_by: 'admin' }),
+        body: JSON.stringify({ board_id: boardId, column_ids: inviteColumnIds, email: inviteEmail.trim(), invited_by: 'admin' }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -65,7 +67,7 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
         else if (d.inviteUrl) { await navigator.clipboard.writeText(d.inviteUrl).catch(() => {}); toast('Invite created - link copied to clipboard'); }
         else toast('Invite created');
         setInviteEmail('');
-        setInviteColumnId(null);
+        setInviteColumnIds([]);
         setInviteRefresh((n) => n + 1);
       } else if (d.upgrade) {
         toast(d.error || 'Upgrade to invite more members');
@@ -373,23 +375,37 @@ export default function RoadmapBoard({ boardId, onBoardChanged }: RoadmapBoardPr
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <p className="text-[12.5px] text-ink-muted -mt-1">The invited member can view and add items to the phase you choose - nothing else.</p>
+              <p className="text-[12.5px] text-ink-muted -mt-1">The invited member can view the board and add items to the phases you choose - nothing else.</p>
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-ink-muted">Email address</label>
                 <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="field" placeholder="teammate@company.com" autoFocus />
               </div>
               <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-ink-muted">Give access to phase</label>
-                <Select
-                  value={inviteColumnId ? String(inviteColumnId) : ''}
-                  onChange={(v) => setInviteColumnId(v ? parseInt(v) : null)}
-                  options={board.columns.map((column) => ({ value: String(column.id), label: column.title }))}
-                  placeholder="Select a phase…"
-                />
+                <label className="mb-1.5 block text-[12px] font-medium text-ink-muted">Give access to phases</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {board.columns.map((column) => {
+                    const on = inviteColumnIds.includes(column.id);
+                    return (
+                      <button
+                        key={column.id}
+                        type="button"
+                        onClick={() => toggleInviteColumn(column.id)}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-medium transition-colors ${
+                          on ? 'border-transparent' : 'border-line text-ink-muted hover:border-line-strong hover:text-ink'
+                        }`}
+                        style={on ? { background: 'var(--accent)', color: 'var(--accent-fg)' } : undefined}
+                      >
+                        {on && <Check size={12} />}
+                        {column.title}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-ink-subtle">One invite covers every selected phase - you can remove phase access later from the list below.</p>
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setShowInviteModal(false)} className="btn btn-outline flex-1 h-9">Cancel</button>
-                <button onClick={handleInviteUser} disabled={!inviteEmail.trim() || !inviteColumnId || inviting} className="btn btn-primary flex-1 h-9">
+                <button onClick={handleInviteUser} disabled={!inviteEmail.trim() || inviteColumnIds.length === 0 || inviting} className="btn btn-primary flex-1 h-9">
                   {inviting ? 'Sending…' : 'Send invite'}
                 </button>
               </div>
